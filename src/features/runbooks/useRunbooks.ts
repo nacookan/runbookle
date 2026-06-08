@@ -13,6 +13,7 @@ type UseRunbooksResult = {
   deleteRunbook: (id: string) => void;
   errorMessage: string | null;
   lastSavedAt: string | null;
+  reloadFromDrive: () => Promise<void>;
   saveNow: () => Promise<void>;
   saveStatus: SaveStatus;
   setRunbookArchived: (id: string, archived: boolean) => void;
@@ -30,6 +31,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
   const dataRef = useRef(data);
   const fileIdRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
+  const loadRequestIdRef = useRef(0);
   const saveRequestIdRef = useRef(0);
 
   useEffect(() => {
@@ -218,6 +220,48 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
     }
   }, [accessToken]);
 
+  const reloadFromDrive = useCallback(async () => {
+    if (!accessToken) {
+      setErrorMessage('Google Driveに接続すると同期できます。');
+      setSaveStatus('local');
+      return;
+    }
+
+    if (dirtyRef.current) {
+      setErrorMessage('未保存の変更があるため同期できません。保存完了後にもう一度同期してください。');
+      return;
+    }
+
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+
+    setSaveStatus('loading');
+    setErrorMessage(null);
+
+    try {
+      const result = await loadOrCreateRunbookleData(accessToken, dataRef.current);
+
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      fileIdRef.current = result.fileId;
+      dataRef.current = result.data;
+      dirtyRef.current = false;
+      setData(result.data);
+      setLastSavedAt(result.data.updatedAt);
+      saveLocalRunbookleData(result.data);
+      setSaveStatus('saved');
+    } catch (error) {
+      if (loadRequestIdRef.current !== requestId) {
+        return;
+      }
+
+      setErrorMessage(createSaveErrorMessage(error));
+      setSaveStatus('error');
+    }
+  }, [accessToken]);
+
   useEffect(() => {
     if (saveStatus !== 'dirty') {
       return;
@@ -239,6 +283,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       deleteRunbook,
       errorMessage,
       lastSavedAt,
+      reloadFromDrive,
       saveNow,
       saveStatus,
       setRunbookArchived,
@@ -250,6 +295,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       deleteRunbook,
       errorMessage,
       lastSavedAt,
+      reloadFromDrive,
       saveNow,
       saveStatus,
       setRunbookArchived,

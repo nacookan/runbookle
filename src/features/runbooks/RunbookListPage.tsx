@@ -1,14 +1,17 @@
 import { useMemo } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { getStartDateSortValue, isPastRunbook } from '../../lib/date';
 import type { Runbook } from './types';
 import styles from './RunbooksApp.module.css';
 
 type RunbookListPageProps = {
+  isSyncing: boolean;
   runbooks: Runbook[];
   onNavigate: (to: string) => void;
+  onSync: () => void;
 };
 
-export function RunbookListPage({ runbooks, onNavigate }: RunbookListPageProps) {
+export function RunbookListPage({ isSyncing, runbooks, onNavigate, onSync }: RunbookListPageProps) {
   const { archivedRunbooks, upcomingRunbooks } = useMemo(
     () => splitRunbooks(runbooks),
     [runbooks],
@@ -21,6 +24,10 @@ export function RunbookListPage({ runbooks, onNavigate }: RunbookListPageProps) 
           <h3 id="upcoming-title" className={styles.sectionTitle}>
             今後の予定
           </h3>
+          <button className={styles.syncButton} type="button" onClick={onSync} disabled={isSyncing}>
+            <RefreshCw className={isSyncing ? styles.syncIconSpinning : undefined} aria-hidden="true" size={15} />
+            同期
+          </button>
         </div>
         <RunbookList
           emptyText="左上の＋ボタンから、行動メモを作成しましょう。"

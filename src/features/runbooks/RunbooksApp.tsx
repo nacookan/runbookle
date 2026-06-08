@@ -51,6 +51,16 @@ export function RunbooksApp({
   const canToggleArchive = editingRunbook ? !isPastRunbook(editingRunbook) : false;
   const checkIssues = useMemo(() => (editingRunbook ? checkRunbookText(editingRunbook.text) : []), [editingRunbook?.text]);
   const checkSummary = useMemo(() => createCheckSummary(checkIssues), [checkIssues]);
+  const isSyncing = isDriveReconnecting || runbooks.saveStatus === 'loading';
+
+  const handleSync = () => {
+    if (!isDriveConnected) {
+      onReconnect();
+      return;
+    }
+
+    void runbooks.reloadFromDrive();
+  };
 
   useEffect(() => {
     if (route.name !== 'edit') {
@@ -263,8 +273,10 @@ export function RunbooksApp({
 
       {route.name === 'list' ? (
         <RunbookListPage
+          isSyncing={isSyncing}
           runbooks={runbooks.data.runbooks}
           onNavigate={navigate}
+          onSync={handleSync}
         />
       ) : null}
       {route.name === 'new' ? (

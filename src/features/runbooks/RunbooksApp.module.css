@@ -267,6 +267,36 @@
   font-weight: 700;
 }
 
+.syncButton {
+  min-height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.syncButton:hover {
+  background: var(--color-hover);
+  color: var(--color-text);
+}
+
+.syncButton:disabled {
+  opacity: 0.58;
+  cursor: wait;
+}
+
+.syncIconSpinning {
+  animation: spin 900ms linear infinite;
+}
+
 .section {
   display: grid;
   gap: 8px;
@@ -649,8 +679,8 @@
 
 @media (max-width: 720px) {
   .sectionHeader {
-    align-items: stretch;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
   }
 
   .runbookRowMain {
