@@ -1,0 +1,92 @@
+:root {
+  color-scheme: light;
+  --color-bg: #eef4f2;
+  --color-bg-muted: #f7f2e8;
+  --color-surface: rgba(255, 255, 255, 0.58);
+  --color-surface-strong: rgba(255, 255, 255, 0.92);
+  --color-surface-glass: rgba(245, 249, 248, 0.96);
+  --color-text: #172426;
+  --color-text-strong: #142326;
+  --color-text-muted: #5d7072;
+  --color-text-subtle: #6b7b7d;
+  --color-primary: #1c5d63;
+  --color-primary-hover: #164c51;
+  --color-primary-text: #ffffff;
+  --color-border: #c8d4d2;
+  --color-border-soft: #d9e2e0;
+  --color-border-strong: #b7c8c5;
+  --color-hover: rgba(28, 93, 99, 0.08);
+  --color-hover-soft: rgba(28, 93, 99, 0.06);
+  --color-focus: rgba(212, 93, 60, 0.34);
+  --color-danger: #8d2f21;
+  --color-danger-border: #e3b9b0;
+  --color-danger-bg: rgba(255, 242, 239, 0.82);
+  --color-warning: #7a5b00;
+  --color-info: #245f6b;
+  --shadow-menu: 0 16px 34px rgba(28, 93, 99, 0.18);
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  color: var(--color-text);
+  background: var(--color-bg);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+    --color-bg: #101718;
+    --color-bg-muted: #11191a;
+    --color-surface: rgba(22, 32, 34, 0.72);
+    --color-surface-strong: rgba(28, 40, 42, 0.98);
+    --color-surface-glass: rgba(16, 23, 24, 0.96);
+    --color-text: #bdcbcb;
+    --color-text-strong: #c8d5d5;
+    --color-text-muted: #788a8c;
+    --color-text-subtle: #687879;
+    --color-primary: #52959b;
+    --color-primary-hover: #61a6ac;
+    --color-primary-text: #071213;
+    --color-border: #314244;
+    --color-border-soft: #263638;
+    --color-border-strong: #405456;
+    --color-hover: rgba(109, 185, 191, 0.14);
+    --color-hover-soft: rgba(109, 185, 191, 0.09);
+    --color-focus: rgba(236, 139, 104, 0.42);
+    --color-danger: #d38b82;
+    --color-danger-border: #7f3f37;
+    --color-danger-bg: rgba(91, 37, 32, 0.42);
+    --color-warning: #b99b58;
+    --color-info: #66aab4;
+    --shadow-menu: 0 16px 34px rgba(0, 0, 0, 0.36);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  min-width: 320px;
+  min-height: 100%;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+img {
+  max-width: 100%;
+  display: block;
+}

@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Runbookle">
+  <rect width="512" height="512" rx="96" fill="#1c5d63" />
+  <path d="M148 128h220c24.3 0 44 19.7 44 44v268H184c-37.6 0-68-30.4-68-68V160c0-17.7 14.3-32 32-32Z" fill="#fffaf0" />
+  <path d="M184 128v312" stroke="#d45d3c" stroke-width="24" stroke-linecap="round" />
+  <path d="M232 210h124M232 274h92M232 338h132" stroke="#1c5d63" stroke-width="24" stroke-linecap="round" />
+  <circle cx="148" cy="372" r="20" fill="#d45d3c" />
+</svg>

@@ -1,0 +1,19 @@
+{
+  "name": "Runbookle",
+  "short_name": "Runbookle",
+  "description": "旅行やイベントなどの行動予定を作るためのWebアプリです。",
+  "id": "/runbookle/",
+  "start_url": "/runbookle/",
+  "scope": "/runbookle/",
+  "display": "standalone",
+  "background_color": "#f7f2e8",
+  "theme_color": "#1c5d63",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+.page {
+  min-height: 100dvh;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.main {
+  min-height: 100dvh;
+  margin: 0 auto;
+  display: grid;
+}
+
+.mainApp {
+  width: min(100%, 1120px);
+  padding: 0;
+  align-items: start;
+}
+
+.mainAuth {
+  width: min(100%, 760px);
+  padding: 32px 20px;
+  place-items: center;
+}
+
+.panel {
+  width: min(100%, 560px);
+  display: grid;
+  justify-items: center;
+  gap: 28px;
+  margin: 0;
+  padding: 0;
+  text-align: center;
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.brandMark {
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px color-mix(in srgb, var(--color-primary) 22%, transparent);
+}
+
+.brandText {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.88rem;
+}
+
+.title {
+  margin: 0;
+  font-size: clamp(2.5rem, 8vw, 5.25rem);
+  line-height: 0.98;
+  font-weight: 760;
+}
+
+.lead {
+  max-width: 520px;
+  margin: 0;
+  color: var(--color-text);
+  font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+  line-height: 1.8;
+}
+
+.authArea {
+  width: 100%;
+  display: grid;
+  gap: 12px;
+  justify-items: center;
+}
+
+.authMessage {
+  margin: 0;
+  color: var(--color-text);
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.googleButton {
+  width: 280px;
+  min-height: 44px;
+}
+
+.privacyList {
+  width: 280px;
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  padding: 12px 14px 12px 28px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+  text-align: left;
+}
+
+.notice {
+  width: min(100%, 520px);
+  margin: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  line-height: 1.7;
+}
+
+@media (max-width: 560px) {
+  .mainApp {
+    padding: 0;
+    align-items: start;
+  }
+
+  .mainAuth {
+    padding: 32px 18px;
+  }
+
+  .brandMark {
+    width: 48px;
+    height: 48px;
+  }
+}
