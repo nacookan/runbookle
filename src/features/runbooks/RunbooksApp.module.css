@@ -224,6 +224,10 @@
   justify-self: end;
   min-height: 36px;
   padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid var(--color-border-strong);
   border-radius: 8px;
   background: var(--color-surface);
@@ -443,6 +447,97 @@
   min-width: 0;
 }
 
+.editorFrame {
+  display: grid;
+  min-width: 0;
+}
+
+.editorToolbar {
+  min-height: 42px;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--color-border-strong);
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: var(--color-surface-strong);
+}
+
+.editorToolbarButton {
+  min-height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.editorToolbarButton:hover {
+  background: var(--color-hover);
+}
+
+.editorToolbarButton:disabled {
+  color: var(--color-text-subtle);
+  cursor: default;
+}
+
+.editorToolbarButton:disabled:hover {
+  background: transparent;
+}
+
+.emojiPickerWrap {
+  position: relative;
+  display: flex;
+}
+
+.emojiPicker {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  padding: 8px;
+  display: grid;
+  grid-template-columns: repeat(8, 36px);
+  gap: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-menu);
+}
+
+.emojiChoice {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.emojiChoice:hover,
+.emojiChoice:focus-visible {
+  background: var(--color-hover);
+}
+
+.emojiChoice:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -2px;
+}
+
 .editorFallback {
   min-height: 460px;
   padding: 14px;
@@ -462,6 +557,11 @@
   border-radius: 8px;
   background: var(--color-surface-strong);
   color: var(--color-text);
+}
+
+.editorFrame .editorFallback,
+.editorFrame .editor :global(.cm-editor) {
+  border-radius: 0 0 8px 8px;
 }
 
 .editor :global(.cm-editor.cm-focused) {
@@ -678,6 +778,177 @@
   color: var(--color-info);
 }
 
+.templateDialog {
+  width: min(100%, 560px);
+  max-height: calc(100dvh - 36px);
+  overflow: hidden;
+}
+
+.templateDialogHeader {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) 34px;
+  align-items: center;
+  gap: 12px;
+}
+
+.templateDialogTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.templateHeaderButton,
+.templateHeaderSpacer {
+  width: 34px;
+  height: 34px;
+}
+
+.templateHeaderButton {
+  display: grid;
+  place-content: center;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.templateHeaderButton:hover {
+  background: var(--color-hover);
+}
+
+.templatePicker {
+  max-height: min(420px, calc(100dvh - 126px));
+  display: grid;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.templateChoice {
+  min-width: 0;
+  padding: 12px 14px;
+  display: grid;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid var(--color-border);
+  border-radius: 0;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.templateChoice:last-child {
+  border-bottom: 0;
+}
+
+.templateChoice:hover {
+  background: var(--color-hover-soft);
+}
+
+.templateChoiceTitle {
+  color: var(--color-text-strong);
+  font-size: 0.9rem;
+  font-weight: 760;
+}
+
+.templateChoiceSample {
+  color: var(--color-text-muted);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.templateForm {
+  min-height: 0;
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+}
+
+.templateFields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.templateField,
+.templatePreviewField {
+  display: grid;
+  gap: 4px;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  font-weight: 720;
+}
+
+.templateFieldWide,
+.templatePreviewField {
+  grid-column: 1 / -1;
+}
+
+.templateInput,
+.templatePreview {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+}
+
+.templateInput {
+  min-height: 38px;
+  padding: 0 10px;
+}
+
+.templateInput::placeholder {
+  color: var(--color-text-subtle);
+}
+
+.templatePreview {
+  min-height: 58px;
+  resize: vertical;
+  padding: 9px 10px;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.templateInput:focus,
+.templatePreview:focus {
+  border-color: var(--color-primary);
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 26%, transparent);
+}
+
+.templateActions {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.templateStatus {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.templateStatusError {
+  color: var(--color-danger);
+}
+
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -701,5 +972,10 @@
   .weekdayInput {
     padding-right: 4px;
     padding-left: 4px;
+  }
+
+  .templatePicker,
+  .templateFields {
+    grid-template-columns: 1fr;
   }
 }

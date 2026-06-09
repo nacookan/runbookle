@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { completeEndDateInput, completeStartDateInput } from './dateCompletion';
+import { EditorToolbar } from './EditorToolbar';
 import { DateRangeFields } from './RunbookDateFields';
-import { TextEditor } from './TextEditor';
+import { TextEditor, type TextEditorActions } from './TextEditor';
 import type { Runbook, RunbookEndDate, RunbookStartDate } from './types';
 import styles from './RunbooksApp.module.css';
 
@@ -29,6 +30,7 @@ export function RunbookEditorPage({
     runbookId: null,
     value: '',
   });
+  const [editorActions, setEditorActions] = useState<TextEditorActions | null>(null);
 
   useEffect(() => {
     if (!runbook) {
@@ -100,9 +102,11 @@ export function RunbookEditorPage({
           }}
         />
 
-        <div className={styles.field}>
+        <div className={styles.editorFrame}>
+          <EditorToolbar onInsertText={editorActions?.insertText} />
           <TextEditor
             value={editorValue}
+            onActionsChange={setEditorActions}
             onChange={(value) => {
               setEditorText({
                 runbookId: runbook.id,

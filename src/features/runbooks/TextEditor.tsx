@@ -4,6 +4,11 @@ import styles from './RunbooksApp.module.css';
 type TextEditorProps = {
   value: string;
   onChange: (value: string) => void;
+  onActionsChange?: (actions: TextEditorActions | null) => void;
+};
+
+export type TextEditorActions = {
+  insertText: (text: string) => void;
 };
 
 const LazyCodeMirrorTextEditor = lazy(() =>
