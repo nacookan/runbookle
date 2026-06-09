@@ -1,7 +1,6 @@
 import {
   acceptCompletion,
   autocompletion,
-  completionStatus,
   insertCompletionText,
   pickedCompletion,
   startCompletion,
@@ -21,7 +20,6 @@ import {
   keymap,
   placeholder,
   ViewPlugin,
-  WidgetType,
   type ViewUpdate,
 } from '@codemirror/view';
 import { parseTimeToken, parseTimesFromLine } from './timeParser';
@@ -46,23 +44,6 @@ type AdjustableTimeToken = {
       };
 };
 
-class DurationWidget extends WidgetType {
-  constructor(private readonly label: string) {
-    super();
-  }
-
-  eq(widget: DurationWidget) {
-    return widget.label === this.label;
-  }
-
-  toDOM() {
-    const element = document.createElement('span');
-    element.className = 'cm-runbookleDuration';
-    element.textContent = this.label;
-    return element;
-  }
-}
-
 const headingDecoration = Decoration.mark({ class: 'cm-runbookleHeading' });
 const checkboxDecoration = Decoration.mark({ class: 'cm-runbookleCheckbox' });
 const checkboxCheckedDecoration = Decoration.mark({ class: 'cm-runbookleCheckboxChecked' });
@@ -78,7 +59,6 @@ export function runbookEditorExtensions(onChange: (value: string) => void): Exte
     autocompletion({
       override: [timeCompletionSource],
     }),
-    timeAdjustmentCompletionTrigger,
     placeholder(RUNBOOK_PLACEHOLDER),
     EditorState.tabSize.of(2),
     EditorView.lineWrapping,
@@ -95,10 +75,11 @@ export function runbookEditorExtensions(onChange: (value: string) => void): Exte
       }
     }),
     runbookDecorations,
+    durationTooltip,
     keymap.of([
       {
         key: 'Tab',
-        run: acceptCompletion,
+        run: acceptOrOpenTimeCompletion,
       },
       {
         key: 'Enter',
@@ -177,45 +158,6 @@ function formatTimeCompletion(value: string) {
   return `${hourText}:${minuteText}`;
 }
 
-const timeAdjustmentCompletionTrigger = ViewPlugin.fromClass(
-  class {
-    private frameId: number | null = null;
-
-    update(update: ViewUpdate) {
-      if (update.docChanged || (!update.selectionSet && !update.focusChanged) || !update.view.hasFocus) {
-        return;
-      }
-
-      if (!getSelectedTimeToken(update.view)) {
-        this.cancel();
-        return;
-      }
-
-      this.cancel();
-      this.frameId = window.requestAnimationFrame(() => {
-        this.frameId = null;
-
-        if (!update.view.hasFocus || completionStatus(update.view.state) || !getSelectedTimeToken(update.view)) {
-          return;
-        }
-
-        startCompletion(update.view);
-      });
-    }
-
-    destroy() {
-      this.cancel();
-    }
-
-    private cancel() {
-      if (this.frameId !== null) {
-        window.cancelAnimationFrame(this.frameId);
-        this.frameId = null;
-      }
-    }
-  },
-);
-
 function getSelectedTimeToken(view: EditorView) {
   const selection = view.state.selection.main;
 
@@ -226,6 +168,19 @@ function getSelectedTimeToken(view: EditorView) {
   const line = view.state.doc.lineAt(selection.head);
 
   return findTimeTokenAtPosition(line.text, selection.head - line.from);
+}
+
+function acceptOrOpenTimeCompletion(view: EditorView) {
+  if (acceptCompletion(view)) {
+    return true;
+  }
+
+  if (!getSelectedTimeToken(view)) {
+    return false;
+  }
+
+  startCompletion(view);
+  return true;
 }
 
 function findTimeTokenAtPosition(text: string, offset: number): AdjustableTimeToken | null {
@@ -373,7 +328,12 @@ const runbookDecorations = ViewPlugin.fromClass(
           return true;
         }
 
-        return toggleCheckboxAtPointer(event, view);
+        if (toggleCheckboxAtPointer(event, view)) {
+          return true;
+        }
+
+        queueTimeCompletionAtPointer(event, view);
+        return false;
       },
     },
   },
@@ -382,7 +342,6 @@ const runbookDecorations = ViewPlugin.fromClass(
 function buildDecorations(view: EditorView): DecorationSet {
   const decorations: Array<{ decoration: Decoration; from: number; to: number }> = [];
   const seenLines = new Set<number>();
-  const activeLineNumber = view.state.selection.main.empty ? view.state.doc.lineAt(view.state.selection.main.head).number : null;
 
   for (const { from, to } of view.visibleRanges) {
     let position = from;
@@ -400,10 +359,6 @@ function buildDecorations(view: EditorView): DecorationSet {
           });
         }
         addLineDecorations(decorations, line.from, line.text);
-
-        if (line.number === activeLineNumber) {
-          addDurationDecoration(decorations, line);
-        }
       }
 
       if (line.to >= to || line.to === view.state.doc.length) {
@@ -425,26 +380,6 @@ function buildDecorations(view: EditorView): DecorationSet {
   return builder.finish();
 }
 
-function addDurationDecoration(
-  decorations: Array<{ decoration: Decoration; from: number; to: number }>,
-  line: { from: number; text: string; to: number },
-) {
-  const durationLabel = createDurationLabel(line.text);
-
-  if (!durationLabel) {
-    return;
-  }
-
-  decorations.push({
-    decoration: Decoration.widget({
-      side: 1,
-      widget: new DurationWidget(durationLabel),
-    }),
-    from: line.to,
-    to: line.to,
-  });
-}
-
 function createDurationLabel(line: string) {
   const [start, end] = parseTimesFromLine(line);
 
@@ -454,6 +389,101 @@ function createDurationLabel(line: string) {
 
   return `${end.totalMinutes - start.totalMinutes}分`;
 }
+
+const durationTooltip = ViewPlugin.fromClass(
+  class {
+    private frameId: number | null = null;
+    private readonly handleScroll = () => this.schedule();
+    private readonly handleResize = () => this.schedule();
+    private readonly tooltip: HTMLSpanElement;
+
+    constructor(private readonly view: EditorView) {
+      this.tooltip = document.createElement('span');
+      this.tooltip.className = 'cm-runbookleDuration';
+      this.tooltip.hidden = true;
+      view.dom.append(this.tooltip);
+      view.scrollDOM.addEventListener('scroll', this.handleScroll);
+      window.addEventListener('resize', this.handleResize);
+      this.schedule();
+    }
+
+    update(update: ViewUpdate) {
+      if (update.docChanged || update.selectionSet || update.viewportChanged || update.geometryChanged) {
+        this.schedule();
+      }
+    }
+
+    destroy() {
+      if (this.frameId !== null) {
+        window.cancelAnimationFrame(this.frameId);
+      }
+
+      this.view.scrollDOM.removeEventListener('scroll', this.handleScroll);
+      window.removeEventListener('resize', this.handleResize);
+      this.tooltip.remove();
+    }
+
+    private schedule() {
+      if (this.frameId !== null) {
+        return;
+      }
+
+      this.frameId = window.requestAnimationFrame(() => {
+        this.frameId = null;
+        this.updateTooltip();
+      });
+    }
+
+    private updateTooltip() {
+      const selection = this.view.state.selection.main;
+
+      if (!selection.empty) {
+        this.hide();
+        return;
+      }
+
+      const line = this.view.state.doc.lineAt(selection.head);
+      const label = createDurationLabel(line.text);
+
+      if (!label) {
+        this.hide();
+        return;
+      }
+
+      const coords = this.view.coordsAtPos(line.to);
+
+      if (!coords) {
+        this.hide();
+        return;
+      }
+
+      const editorRect = this.view.dom.getBoundingClientRect();
+      const scrollerRect = this.view.scrollDOM.getBoundingClientRect();
+
+      if (coords.bottom < scrollerRect.top || coords.top > scrollerRect.bottom) {
+        this.hide();
+        return;
+      }
+
+      this.tooltip.hidden = false;
+      this.tooltip.textContent = label;
+
+      const tooltipWidth = this.tooltip.offsetWidth;
+      const tooltipHeight = this.tooltip.offsetHeight;
+      const preferredLeft = coords.right - editorRect.left + 12;
+      const maxLeft = scrollerRect.right - editorRect.left - tooltipWidth - 10;
+      const left = Math.max(8, Math.min(preferredLeft, maxLeft));
+      const top = coords.top - editorRect.top + (coords.bottom - coords.top - tooltipHeight) / 2;
+
+      this.tooltip.style.left = `${left}px`;
+      this.tooltip.style.top = `${Math.max(8, top)}px`;
+    }
+
+    private hide() {
+      this.tooltip.hidden = true;
+    }
+  },
+);
 
 function addLineDecorations(
   decorations: Array<{ decoration: Decoration; from: number; to: number }>,
@@ -522,20 +552,48 @@ function toggleCheckboxAtPointer(event: MouseEvent, view: EditorView) {
     return false;
   }
 
+  const checkboxFrom = line.from + checkbox.from;
+  const checkboxTo = line.from + checkbox.to;
+
+  if (!isPointerInsideTextRange(event, view, checkboxFrom, checkboxTo)) {
+    return false;
+  }
+
   event.preventDefault();
   view.focus();
   view.dispatch({
     changes: {
-      from: line.from + checkbox.from,
-      to: line.from + checkbox.to,
+      from: checkboxFrom,
+      to: checkboxTo,
       insert: checkbox.checked ? '[ ]' : '[x]',
     },
     selection: {
-      anchor: line.from + checkbox.to,
+      anchor: checkboxTo,
     },
   });
 
   return true;
+}
+
+function isPointerInsideTextRange(event: MouseEvent, view: EditorView, from: number, to: number) {
+  const tolerance = 2;
+
+  for (let position = from; position < to; position += 1) {
+    const coords = view.coordsForChar(position);
+
+    if (!coords) {
+      continue;
+    }
+
+    const insideX = event.clientX >= coords.left - tolerance && event.clientX <= coords.right + tolerance;
+    const insideY = event.clientY >= coords.top - tolerance && event.clientY <= coords.bottom + tolerance;
+
+    if (insideX && insideY) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function selectTimeAtPointer(event: MouseEvent, view: EditorView) {
@@ -570,6 +628,34 @@ function selectTimeAtPointer(event: MouseEvent, view: EditorView) {
   });
 
   return true;
+}
+
+function queueTimeCompletionAtPointer(event: MouseEvent, view: EditorView) {
+  if (event.button !== 0 || event.detail !== 1) {
+    return;
+  }
+
+  const position = view.posAtCoords({
+    x: event.clientX,
+    y: event.clientY,
+  });
+
+  if (position === null) {
+    return;
+  }
+
+  const line = view.state.doc.lineAt(position);
+  const timeToken = findTimeTokenAtPosition(line.text, position - line.from);
+
+  if (!timeToken) {
+    return;
+  }
+
+  window.requestAnimationFrame(() => {
+    if (view.hasFocus && getSelectedTimeToken(view)) {
+      startCompletion(view);
+    }
+  });
 }
 
 function findCheckboxAtPosition(text: string, offset: number) {
