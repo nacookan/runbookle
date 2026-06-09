@@ -24,12 +24,27 @@ import {
   WidgetType,
   type ViewUpdate,
 } from '@codemirror/view';
-import { parseTimesFromLine } from './timeParser';
+import { parseTimeToken, parseTimesFromLine } from './timeParser';
 
 const RUNBOOK_PLACEHOLDER = '◆ 2026-6-8(月)\n\n1000 1030 移動\n- [ ] チケット予約';
 
 const TIME_ADJUSTMENT_STEPS = [-5, -10, -30, 5, 10, 30];
 const MAX_TIME_MINUTES = 30 * 60 + 59;
+
+type AdjustableTimeToken = {
+  from: number;
+  to: number;
+  totalMinutes: number;
+  format:
+    | {
+        type: 'colon';
+        hourWidth: number;
+      }
+    | {
+        type: 'compact';
+        tokenLength: number;
+      };
+};
 
 class DurationWidget extends WidgetType {
   constructor(private readonly label: string) {
@@ -100,6 +115,17 @@ export function runbookEditorExtensions(onChange: (value: string) => void): Exte
 function timeCompletionSource(context: CompletionContext) {
   const line = context.state.doc.lineAt(context.pos);
   const offset = context.pos - line.from;
+  const timeToken = findTimeTokenAtPosition(line.text, offset);
+
+  if (context.explicit && timeToken) {
+    return {
+      from: line.from + timeToken.from,
+      to: line.from + timeToken.to,
+      filter: false,
+      options: createTimeAdjustmentOptions(timeToken),
+    };
+  }
+
   const beforeCursor = line.text.slice(0, offset);
   const afterCursor = line.text.slice(offset);
   const match = beforeCursor.match(/(?:^|[^0-9A-Za-z_:])(\d{3,4})$/);
@@ -122,9 +148,7 @@ function timeCompletionSource(context: CompletionContext) {
     }
   }
 
-  const timeToken = findColonTimeAtPosition(line.text, offset);
-
-  if (!timeToken) {
+  if (!timeToken || timeToken.format.type !== 'colon') {
     return null;
   }
 
@@ -132,7 +156,7 @@ function timeCompletionSource(context: CompletionContext) {
     from: line.from + timeToken.from,
     to: line.from + timeToken.to,
     filter: false,
-    options: createTimeAdjustmentOptions(timeToken.totalMinutes, timeToken.hourWidth),
+    options: createTimeAdjustmentOptions(timeToken),
   };
 }
 
@@ -162,7 +186,7 @@ const timeAdjustmentCompletionTrigger = ViewPlugin.fromClass(
         return;
       }
 
-      if (!getSelectedColonTime(update.view)) {
+      if (!getSelectedTimeToken(update.view)) {
         this.cancel();
         return;
       }
@@ -171,7 +195,7 @@ const timeAdjustmentCompletionTrigger = ViewPlugin.fromClass(
       this.frameId = window.requestAnimationFrame(() => {
         this.frameId = null;
 
-        if (!update.view.hasFocus || completionStatus(update.view.state) || !getSelectedColonTime(update.view)) {
+        if (!update.view.hasFocus || completionStatus(update.view.state) || !getSelectedTimeToken(update.view)) {
           return;
         }
 
@@ -192,7 +216,7 @@ const timeAdjustmentCompletionTrigger = ViewPlugin.fromClass(
   },
 );
 
-function getSelectedColonTime(view: EditorView) {
+function getSelectedTimeToken(view: EditorView) {
   const selection = view.state.selection.main;
 
   if (!selection.empty) {
@@ -201,10 +225,14 @@ function getSelectedColonTime(view: EditorView) {
 
   const line = view.state.doc.lineAt(selection.head);
 
-  return findColonTimeAtPosition(line.text, selection.head - line.from);
+  return findTimeTokenAtPosition(line.text, selection.head - line.from);
 }
 
-function findColonTimeAtPosition(text: string, offset: number) {
+function findTimeTokenAtPosition(text: string, offset: number): AdjustableTimeToken | null {
+  return findColonTimeAtPosition(text, offset) ?? findCompactTimeAtPosition(text, offset);
+}
+
+function findColonTimeAtPosition(text: string, offset: number): AdjustableTimeToken | null {
   for (const match of text.matchAll(/\b(\d{1,2}):(\d{2})\b/g)) {
     if (match.index === undefined || !match[1] || !match[2]) {
       continue;
@@ -225,9 +253,12 @@ function findColonTimeAtPosition(text: string, offset: number) {
     }
 
     return {
+      format: {
+        type: 'colon',
+        hourWidth: match[1].length,
+      },
       from,
       to,
-      hourWidth: match[1].length,
       totalMinutes: hours * 60 + minutes,
     };
   }
@@ -235,20 +266,53 @@ function findColonTimeAtPosition(text: string, offset: number) {
   return null;
 }
 
-function createTimeAdjustmentOptions(totalMinutes: number, hourWidth: number) {
+function findCompactTimeAtPosition(text: string, offset: number): AdjustableTimeToken | null {
+  for (const match of text.matchAll(/\b\d{3,4}\b/g)) {
+    if (match.index === undefined || !match[0]) {
+      continue;
+    }
+
+    const from = match.index;
+    const to = from + match[0].length;
+
+    if (offset < from || offset > to) {
+      continue;
+    }
+
+    const time = parseTimeToken(match[0]);
+
+    if (!time) {
+      continue;
+    }
+
+    return {
+      format: {
+        type: 'compact',
+        tokenLength: match[0].length,
+      },
+      from,
+      to,
+      totalMinutes: time.totalMinutes,
+    };
+  }
+
+  return null;
+}
+
+function createTimeAdjustmentOptions(timeToken: AdjustableTimeToken) {
   return TIME_ADJUSTMENT_STEPS
-    .map((step) => createTimeAdjustmentOption(totalMinutes, step, hourWidth))
+    .map((step) => createTimeAdjustmentOption(timeToken, step))
     .filter((option): option is Completion => Boolean(option));
 }
 
-function createTimeAdjustmentOption(totalMinutes: number, step: number, hourWidth: number): Completion | null {
-  const nextTotalMinutes = totalMinutes + step;
+function createTimeAdjustmentOption(timeToken: AdjustableTimeToken, step: number): Completion | null {
+  const nextTotalMinutes = timeToken.totalMinutes + step;
 
   if (nextTotalMinutes < 0 || nextTotalMinutes > MAX_TIME_MINUTES) {
     return null;
   }
 
-  const label = formatTotalMinutes(nextTotalMinutes, hourWidth);
+  const label = formatTotalMinutes(nextTotalMinutes, timeToken.format);
   const offsetLabel = step > 0 ? `+${step}` : `${step}`;
 
   return {
@@ -262,7 +326,7 @@ function createTimeAdjustmentOption(totalMinutes: number, step: number, hourWidt
       });
 
       window.requestAnimationFrame(() => {
-        if (view.hasFocus && getSelectedColonTime(view)) {
+        if (view.hasFocus && getSelectedTimeToken(view)) {
           startCompletion(view);
         }
       });
@@ -271,11 +335,20 @@ function createTimeAdjustmentOption(totalMinutes: number, step: number, hourWidt
   };
 }
 
-function formatTotalMinutes(totalMinutes: number, hourWidth: number) {
+function formatTotalMinutes(totalMinutes: number, format: AdjustableTimeToken['format']) {
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
+  const paddedMinutes = String(minutes).padStart(2, '0');
 
-  return `${String(hours).padStart(hourWidth, '0')}:${String(minutes).padStart(2, '0')}`;
+  if (format.type === 'compact') {
+    if (format.tokenLength === 4) {
+      return `${String(hours).padStart(2, '0')}${paddedMinutes}`;
+    }
+
+    return `${hours}${paddedMinutes}`;
+  }
+
+  return `${String(hours).padStart(format.hourWidth, '0')}:${paddedMinutes}`;
 }
 
 const runbookDecorations = ViewPlugin.fromClass(
@@ -480,7 +553,7 @@ function selectTimeAtPointer(event: MouseEvent, view: EditorView) {
   }
 
   const line = view.state.doc.lineAt(position);
-  const timeToken = findColonTimeAtPosition(line.text, position - line.from);
+  const timeToken = findTimeTokenAtPosition(line.text, position - line.from);
 
   if (!timeToken) {
     return false;
