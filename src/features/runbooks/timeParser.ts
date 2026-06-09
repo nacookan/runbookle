@@ -6,7 +6,6 @@ export type ParsedTime = {
 };
 
 export type ParsedTimeLine = {
-  heading: string;
   lineNumber: number;
   line: string;
   start: ParsedTime;
@@ -16,16 +15,8 @@ export type ParsedTimeLine = {
 export function parseRunbookTimeLines(text: string): ParsedTimeLine[] {
   const lines = text.split(/\r?\n/);
   const parsedLines: ParsedTimeLine[] = [];
-  let currentHeading = '日付未指定';
 
   lines.forEach((line, index) => {
-    const headingMatch = line.match(/^◆\s*(.+)$/);
-
-    if (headingMatch?.[1]) {
-      currentHeading = headingMatch[1].trim();
-      return;
-    }
-
     const times = parseTimesFromLine(line);
 
     if (!times[0]) {
@@ -33,7 +24,6 @@ export function parseRunbookTimeLines(text: string): ParsedTimeLine[] {
     }
 
     parsedLines.push({
-      heading: currentHeading,
       lineNumber: index + 1,
       line,
       start: times[0],
@@ -45,7 +35,9 @@ export function parseRunbookTimeLines(text: string): ParsedTimeLine[] {
 }
 
 export function parseTimesFromLine(line: string): ParsedTime[] {
-  const tokens = line.match(/\b(?:\d{3,4}|\d{1,2}:\d{2})\b/g) ?? [];
+  const tokens = Array.from(line.matchAll(/\d{1,2}:\d{2}|\d{3,4}/g))
+    .filter((match) => match.index !== undefined && hasTimeTokenBoundary(line, match.index, match[0]))
+    .map((match) => match[0]);
 
   return tokens.map(parseTimeToken).filter((time): time is ParsedTime => Boolean(time));
 }
@@ -81,4 +73,13 @@ export function parseTimeToken(token: string): ParsedTime | null {
 
 export function formatParsedTime(time: ParsedTime) {
   return `${String(time.hours).padStart(2, '0')}:${String(time.minutes).padStart(2, '0')}`;
+}
+
+function hasTimeTokenBoundary(line: string, index: number, token: string) {
+  const before = line[index - 1] ?? '';
+  const after = line[index + token.length] ?? '';
+  const isCompactTime = /^\d{3,4}$/.test(token);
+  const invalidBoundary = isCompactTime ? /[0-9A-Za-z_:./-]/ : /[0-9A-Za-z_:]/;
+
+  return !invalidBoundary.test(before) && !invalidBoundary.test(after);
 }
