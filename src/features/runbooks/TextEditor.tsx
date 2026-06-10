@@ -8,6 +8,7 @@ type TextEditorProps = {
 };
 
 export type TextEditorActions = {
+  focusLine: (lineNumber: number) => void;
   insertDateSeparator: () => void;
   insertText: (text: string) => void;
 };

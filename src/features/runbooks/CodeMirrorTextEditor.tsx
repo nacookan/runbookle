@@ -77,6 +77,23 @@ export function CodeMirrorTextEditor({ value, onChange, onActionsChange }: CodeM
     };
 
     onActionsChange({
+      focusLine: (lineNumber) => {
+        const editorView = editorViewRef.current;
+
+        if (!editorView) {
+          return;
+        }
+
+        const line = editorView.state.doc.line(Math.min(Math.max(1, lineNumber), editorView.state.doc.lines));
+
+        editorView.dispatch({
+          selection: {
+            anchor: line.from,
+          },
+          scrollIntoView: true,
+        });
+        editorView.focus();
+      },
       insertDateSeparator: () => {
         const editorView = editorViewRef.current;
 

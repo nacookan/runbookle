@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { completeEndDateInput, completeStartDateInput } from './dateCompletion';
 import { EditorToolbar, type EditorValidationSummary } from './EditorToolbar';
@@ -12,6 +12,7 @@ type RunbookEditorPageProps = {
   runbooks: Runbook[];
   updateRunbook: (id: string, updater: (runbook: Runbook) => Runbook) => void;
   onNavigate: (to: string) => void;
+  onEditorActionsChange?: (actions: TextEditorActions | null) => void;
   onShowValidation: () => void;
   validationSummary: EditorValidationSummary;
 };
@@ -21,6 +22,7 @@ export function RunbookEditorPage({
   runbooks,
   updateRunbook,
   onNavigate,
+  onEditorActionsChange,
   onShowValidation,
   validationSummary,
 }: RunbookEditorPageProps) {
@@ -35,6 +37,14 @@ export function RunbookEditorPage({
     value: '',
   });
   const [editorActions, setEditorActions] = useState<TextEditorActions | null>(null);
+
+  const handleEditorActionsChange = useCallback(
+    (actions: TextEditorActions | null) => {
+      setEditorActions(actions);
+      onEditorActionsChange?.(actions);
+    },
+    [onEditorActionsChange],
+  );
 
   useEffect(() => {
     if (!runbook) {
@@ -115,7 +125,7 @@ export function RunbookEditorPage({
           />
           <TextEditor
             value={editorValue}
-            onActionsChange={setEditorActions}
+            onActionsChange={handleEditorActionsChange}
             onChange={(value) => {
               setEditorText({
                 runbookId: runbook.id,

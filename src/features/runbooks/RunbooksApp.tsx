@@ -19,6 +19,7 @@ import { RunbookEditorPage } from './RunbookEditorPage';
 import { RunbookListPage } from './RunbookListPage';
 import { NewRunbookPage } from './NewRunbookPage';
 import { checkRunbookText, type CheckIssue } from './checkRunbookText';
+import type { TextEditorActions } from './TextEditor';
 import { useRunbooks, type SaveStatus } from './useRunbooks';
 import styles from './RunbooksApp.module.css';
 
@@ -43,6 +44,7 @@ export function RunbooksApp({
   const { navigate, route } = useAppRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCheckDialogOpen, setIsCheckDialogOpen] = useState(false);
+  const [editorActions, setEditorActions] = useState<TextEditorActions | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const topbarTitle = route.name === 'new' ? '新規作成' : route.name === 'edit' ? '編集' : 'Runbookle';
@@ -61,8 +63,23 @@ export function RunbooksApp({
     void runbooks.reloadFromDrive();
   };
 
+  const selectCheckIssue = (issue: CheckIssue) => {
+    setIsCheckDialogOpen(false);
+
+    if (!issue.lineNumber) {
+      return;
+    }
+
+    const textLineNumber = issue.lineNumber;
+
+    window.requestAnimationFrame(() => {
+      editorActions?.focusLine(textLineNumber + 1);
+    });
+  };
+
   useEffect(() => {
     if (route.name !== 'edit') {
+      setEditorActions(null);
       setIsSaveDialogOpen(false);
       setIsCheckDialogOpen(false);
     }
@@ -226,7 +243,7 @@ export function RunbooksApp({
       {route.name === 'edit' && isCheckDialogOpen ? (
         <div className={styles.dialogBackdrop} role="presentation" onClick={() => setIsCheckDialogOpen(false)}>
           <section
-            className={styles.dialog}
+            className={`${styles.dialog} ${styles.checkDialog}`}
             role="dialog"
             aria-modal="true"
             aria-labelledby="check-dialog-title"
@@ -238,14 +255,22 @@ export function RunbooksApp({
             <p className={styles.dialogText}>{formatCheckSummary(checkSummary)}</p>
             {checkIssues.length === 0 ? <p className={styles.dialogText}>問題は見つかりませんでした。</p> : null}
             {checkIssues.length > 0 ? (
-              <ul className={styles.checkList}>
+              <div className={styles.checkResultList}>
                 {checkIssues.map((issue, index) => (
-                  <li key={`${issue.type}-${issue.lineNumber ?? 'none'}-${index}`} className={getIssueClass(issue)}>
-                    {issue.lineNumber ? `${issue.lineNumber}行目: ` : ''}
-                    {issue.message}
-                  </li>
+                  <button
+                    key={`${issue.type}-${issue.lineNumber ?? 'none'}-${index}`}
+                    className={`${styles.checkResultRow} ${getIssueClass(issue)}`}
+                    type="button"
+                    onClick={() => selectCheckIssue(issue)}
+                  >
+                    <span className={styles.checkResultMeta}>
+                      <span className={styles.checkResultType}>{getIssueTypeLabel(issue)}</span>
+                      <span>{issue.lineNumber ? `${issue.lineNumber}行目` : '全体'}</span>
+                    </span>
+                    <span className={styles.checkResultMessage}>{issue.message}</span>
+                  </button>
                 ))}
-              </ul>
+              </div>
             ) : null}
             <button className={styles.dialogButton} type="button" onClick={() => setIsCheckDialogOpen(false)}>
               閉じる
@@ -273,6 +298,7 @@ export function RunbooksApp({
           runbooks={runbooks.data.runbooks}
           updateRunbook={runbooks.updateRunbook}
           onNavigate={navigate}
+          onEditorActionsChange={setEditorActions}
           onShowValidation={() => setIsCheckDialogOpen(true)}
           validationSummary={checkSummary}
         />
@@ -357,14 +383,26 @@ function formatCheckSummary(summary: CheckSummary) {
 
 function getIssueClass(issue: CheckIssue) {
   if (issue.type === 'error') {
-    return styles.checkError;
+    return styles.checkResultRowError;
   }
 
   if (issue.type === 'warning') {
-    return styles.checkWarning;
+    return styles.checkResultRowWarning;
   }
 
-  return styles.checkInfo;
+  return styles.checkResultRowInfo;
+}
+
+function getIssueTypeLabel(issue: CheckIssue) {
+  if (issue.type === 'error') {
+    return 'エラー';
+  }
+
+  if (issue.type === 'warning') {
+    return '警告';
+  }
+
+  return '情報';
 }
 
 function getSaveStatusLabel(status: SaveStatus, isDriveReconnecting = false) {
