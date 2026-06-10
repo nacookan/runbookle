@@ -22,9 +22,9 @@ import {
   ViewPlugin,
   type ViewUpdate,
 } from '@codemirror/view';
-import { parseTimeToken, parseTimesFromLine } from './timeParser';
+import { isRunbookDateSeparatorLine, parseTimeToken, parseTimesFromLine } from './timeParser';
 
-const RUNBOOK_PLACEHOLDER = '◆ 2026-6-8(月)\n\n1000 1030 移動\n- [ ] チケット予約';
+const RUNBOOK_PLACEHOLDER = '## 2026-6-8(月)\n\n1000 1030 移動\n- [ ] チケット予約';
 
 const TIME_ADJUSTMENT_STEPS = [-5, -10, -30, 5, 10, 30];
 const MAX_TIME_MINUTES = 30 * 60 + 59;
@@ -494,7 +494,7 @@ function addLineDecorations(
     return;
   }
 
-  if (/^◆\s*.+/.test(text)) {
+  if (isRunbookDateSeparatorLine(text) || /^◆\s*.+/.test(text)) {
     decorations.push({
       decoration: headingDecoration,
       from: lineFrom,

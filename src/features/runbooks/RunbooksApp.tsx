@@ -7,7 +7,6 @@ import {
   ChevronLeft,
   Circle,
   CloudOff,
-  Info,
   LoaderCircle,
   LogOut,
   Menu,
@@ -154,20 +153,6 @@ export function RunbooksApp({
           </button>
           {isMenuOpen ? (
             <div className={styles.menuPanel} role="menu">
-              {editingRunbook ? (
-                <button
-                  className={styles.menuItem}
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    setIsMenuOpen(false);
-                    setIsCheckDialogOpen(true);
-                  }}
-                >
-                  <CheckStatusIcon summary={checkSummary} />
-                  チェック結果
-                </button>
-              ) : null}
               {editingRunbook && canToggleArchive ? (
                 <button
                   className={styles.menuItem}
@@ -288,6 +273,8 @@ export function RunbooksApp({
           runbooks={runbooks.data.runbooks}
           updateRunbook={runbooks.updateRunbook}
           onNavigate={navigate}
+          onShowValidation={() => setIsCheckDialogOpen(true)}
+          validationSummary={checkSummary}
         />
       ) : null}
     </section>
@@ -362,22 +349,6 @@ function createCheckSummary(issues: CheckIssue[]): CheckSummary {
     warningCount: issues.filter((issue) => issue.type === 'warning').length,
     infoCount: issues.filter((issue) => issue.type === 'info').length,
   };
-}
-
-function CheckStatusIcon({ summary }: { summary: CheckSummary }) {
-  if (summary.errorCount > 0) {
-    return <AlertCircle className={`${styles.checkIcon} ${styles.checkIconError}`} aria-hidden="true" size={18} />;
-  }
-
-  if (summary.warningCount > 0) {
-    return <Info className={`${styles.checkIcon} ${styles.checkIconWarning}`} aria-hidden="true" size={18} />;
-  }
-
-  if (summary.infoCount > 0) {
-    return <Info className={`${styles.checkIcon} ${styles.checkIconInfo}`} aria-hidden="true" size={18} />;
-  }
-
-  return <CheckCircle2 className={`${styles.checkIcon} ${styles.checkIconOk}`} aria-hidden="true" size={18} />;
 }
 
 function formatCheckSummary(summary: CheckSummary) {

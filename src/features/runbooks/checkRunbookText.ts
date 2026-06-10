@@ -9,10 +9,10 @@ export type CheckIssue = {
 };
 
 export function checkRunbookText(text: string): CheckIssue[] {
-  return [...findTimeOrderIssues(text), ...findUncheckedCheckboxIssues(text)];
+  return [...findTimeRangeIssues(text), ...findSectionTimeOrderIssues(text), ...findUncheckedCheckboxIssues(text)];
 }
 
-function findTimeOrderIssues(text: string): CheckIssue[] {
+function findTimeRangeIssues(text: string): CheckIssue[] {
   return parseRunbookTimeLines(text)
     .filter((line): line is ParsedTimeLine & { end: NonNullable<ParsedTimeLine['end']> } =>
       Boolean(line.end && line.end.totalMinutes < line.start.totalMinutes),
@@ -22,6 +22,31 @@ function findTimeOrderIssues(text: string): CheckIssue[] {
       lineNumber: line.lineNumber,
       message: `開始時刻 ${formatParsedTime(line.start)} より終了時刻 ${formatParsedTime(line.end)} が前です。`,
     }));
+}
+
+function findSectionTimeOrderIssues(text: string): CheckIssue[] {
+  const issues: CheckIssue[] = [];
+  const previousLineBySection = new Map<number, ParsedTimeLine>();
+
+  for (const line of parseRunbookTimeLines(text)) {
+    if (line.sectionIndex === null) {
+      continue;
+    }
+
+    const previousLine = previousLineBySection.get(line.sectionIndex);
+
+    if (previousLine && line.start.totalMinutes < previousLine.start.totalMinutes) {
+      issues.push({
+        type: 'warning',
+        lineNumber: line.lineNumber,
+        message: `同じ日付区切り内で時刻が前後しています。${formatParsedTime(previousLine.start)} の後に ${formatParsedTime(line.start)} があります。`,
+      });
+    }
+
+    previousLineBySection.set(line.sectionIndex, line);
+  }
+
+  return issues;
 }
 
 function findUncheckedCheckboxIssues(text: string): CheckIssue[] {

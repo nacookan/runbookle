@@ -112,7 +112,7 @@ export function formatDateRange(runbook: Runbook) {
 export function formatHeadingDate(date: DateParts) {
   const weekday = WEEKDAYS[new Date(date.year, date.month - 1, date.day).getDay()];
 
-  return `◆ ${date.year}-${date.month}-${date.day}(${weekday})`;
+  return `## ${date.year}-${date.month}-${date.day}(${weekday})`;
 }
 
 export function generateInitialRunbookText(startDate: RunbookStartDate, endDate: RunbookEndDate) {
@@ -121,11 +121,11 @@ export function generateInitialRunbookText(startDate: RunbookStartDate, endDate:
   }
 
   if (endDate.mode !== 'date') {
-    return `${formatHeadingDate(startDate)}\n\n`;
+    return '';
   }
 
-  if (!isCompleteEndDate(endDate) || compareDateParts(endDate, startDate) < 0) {
-    return `${formatHeadingDate(startDate)}\n\n`;
+  if (!isCompleteEndDate(endDate) || compareDateParts(endDate, startDate) <= 0) {
+    return '';
   }
 
   const headings: string[] = [];

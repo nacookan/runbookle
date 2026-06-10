@@ -6,6 +6,7 @@ export type ParsedTime = {
 };
 
 export type ParsedTimeLine = {
+  sectionIndex: number | null;
   lineNumber: number;
   line: string;
   start: ParsedTime;
@@ -15,8 +16,15 @@ export type ParsedTimeLine = {
 export function parseRunbookTimeLines(text: string): ParsedTimeLine[] {
   const lines = text.split(/\r?\n/);
   const parsedLines: ParsedTimeLine[] = [];
+  const hasDateSeparator = lines.some(isRunbookDateSeparatorLine);
+  let currentSectionIndex: number | null = hasDateSeparator ? null : 0;
 
   lines.forEach((line, index) => {
+    if (isRunbookDateSeparatorLine(line)) {
+      currentSectionIndex = currentSectionIndex === null ? 0 : currentSectionIndex + 1;
+      return;
+    }
+
     const times = parseTimesFromLine(line);
 
     if (!times[0]) {
@@ -24,6 +32,7 @@ export function parseRunbookTimeLines(text: string): ParsedTimeLine[] {
     }
 
     parsedLines.push({
+      sectionIndex: currentSectionIndex,
       lineNumber: index + 1,
       line,
       start: times[0],
@@ -32,6 +41,10 @@ export function parseRunbookTimeLines(text: string): ParsedTimeLine[] {
   });
 
   return parsedLines;
+}
+
+export function isRunbookDateSeparatorLine(line: string) {
+  return line.startsWith('##');
 }
 
 export function parseTimesFromLine(line: string): ParsedTime[] {

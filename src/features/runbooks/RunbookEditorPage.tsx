@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '../../components/ui/Button';
 import { completeEndDateInput, completeStartDateInput } from './dateCompletion';
-import { EditorToolbar } from './EditorToolbar';
+import { EditorToolbar, type EditorValidationSummary } from './EditorToolbar';
 import { DateRangeFields } from './RunbookDateFields';
 import { TextEditor, type TextEditorActions } from './TextEditor';
 import type { Runbook, RunbookEndDate, RunbookStartDate } from './types';
@@ -12,6 +12,8 @@ type RunbookEditorPageProps = {
   runbooks: Runbook[];
   updateRunbook: (id: string, updater: (runbook: Runbook) => Runbook) => void;
   onNavigate: (to: string) => void;
+  onShowValidation: () => void;
+  validationSummary: EditorValidationSummary;
 };
 
 export function RunbookEditorPage({
@@ -19,6 +21,8 @@ export function RunbookEditorPage({
   runbooks,
   updateRunbook,
   onNavigate,
+  onShowValidation,
+  validationSummary,
 }: RunbookEditorPageProps) {
   const runbook = runbooks.find((item) => item.id === id);
   const [dateInputs, setDateInputs] = useState<RunbookDateInputs>({
@@ -103,7 +107,12 @@ export function RunbookEditorPage({
         />
 
         <div className={styles.editorFrame}>
-          <EditorToolbar onInsertText={editorActions?.insertText} />
+          <EditorToolbar
+            onInsertDateSeparator={editorActions?.insertDateSeparator}
+            onInsertText={editorActions?.insertText}
+            onShowValidation={onShowValidation}
+            validationSummary={validationSummary}
+          />
           <TextEditor
             value={editorValue}
             onActionsChange={setEditorActions}

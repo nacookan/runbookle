@@ -484,6 +484,10 @@
   background: var(--color-hover);
 }
 
+.editorToolbarButtonEnd {
+  margin-left: auto;
+}
+
 .editorToolbarButton:disabled {
   color: var(--color-text-subtle);
   cursor: default;
@@ -494,6 +498,11 @@
 }
 
 .emojiPickerWrap {
+  position: relative;
+  display: flex;
+}
+
+.notationGuideWrap {
   position: relative;
   display: flex;
 }
@@ -511,6 +520,73 @@
   border-radius: 8px;
   background: var(--color-surface-strong);
   box-shadow: var(--shadow-menu);
+}
+
+.notationGuide {
+  position: fixed;
+  z-index: 20;
+  overflow: hidden;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-menu);
+}
+
+.notationGuideItem {
+  min-width: 0;
+  padding: 10px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.notationGuideItem:last-child {
+  border-bottom: 0;
+}
+
+.notationGuideText {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.notationGuideTitle {
+  color: var(--color-text-strong);
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 0.86rem;
+  font-weight: 760;
+}
+
+.notationGuideDescription {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.notationInsertButton {
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+.notationInsertButton:hover,
+.notationInsertButton:focus-visible {
+  background: var(--color-hover);
+}
+
+.notationInsertButton:focus-visible {
+  outline: 3px solid var(--color-focus);
+  outline-offset: -2px;
 }
 
 .emojiChoice {

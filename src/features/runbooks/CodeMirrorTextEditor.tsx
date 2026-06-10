@@ -53,8 +53,31 @@ export function CodeMirrorTextEditor({ value, onChange, onActionsChange }: CodeM
       return;
     }
 
+    const insertText = (text: string) => {
+      const editorView = editorViewRef.current;
+
+      if (!editorView) {
+        return;
+      }
+
+      const selection = editorView.state.selection.main;
+
+      editorView.dispatch({
+        changes: {
+          from: selection.from,
+          to: selection.to,
+          insert: text,
+        },
+        selection: {
+          anchor: selection.from + text.length,
+        },
+        scrollIntoView: true,
+      });
+      editorView.focus();
+    };
+
     onActionsChange({
-      insertText: (text) => {
+      insertDateSeparator: () => {
         const editorView = editorViewRef.current;
 
         if (!editorView) {
@@ -62,20 +85,11 @@ export function CodeMirrorTextEditor({ value, onChange, onActionsChange }: CodeM
         }
 
         const selection = editorView.state.selection.main;
+        const line = editorView.state.doc.lineAt(selection.from);
 
-        editorView.dispatch({
-          changes: {
-            from: selection.from,
-            to: selection.to,
-            insert: text,
-          },
-          selection: {
-            anchor: selection.from + text.length,
-          },
-          scrollIntoView: true,
-        });
-        editorView.focus();
+        insertText(selection.from === line.from ? '## ' : '\n## ');
       },
+      insertText,
     });
 
     return () => {
