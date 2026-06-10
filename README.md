@@ -1,6 +1,7 @@
 # Runbookle
 
 Runbookle は [https://nacookan.github.io/runbookle/](https://nacookan.github.io/runbookle/) で利用できます。
+PWAとしてホーム画面に追加して使うのがおすすめです。iPhoneのSafariでは、共有メニューから「ホーム画面に追加」を選んでください。
 
 Runbookle は、1日または数日間の行動予定を作るためのWebアプリです。旅行、出張、イベント参加日、複数予定がある日などに使う、時刻付きの行動メモ / 進行表に近いアプリを目指します。データはユーザー自身の Google Drive に保存します。
 
