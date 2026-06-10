@@ -778,6 +778,11 @@
   color: var(--color-info);
 }
 
+.templateDialogBackdrop {
+  place-items: start center;
+  overflow: auto;
+}
+
 .templateDialog {
   width: min(100%, 560px);
   max-height: calc(100dvh - 36px);

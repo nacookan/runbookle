@@ -179,7 +179,7 @@ function TemplateDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <div className={styles.dialogBackdrop} role="presentation" onClick={onClose}>
+    <div className={`${styles.dialogBackdrop} ${styles.templateDialogBackdrop}`} role="presentation" onClick={onClose}>
       <section
         className={`${styles.dialog} ${styles.templateDialog}`}
         role="dialog"
