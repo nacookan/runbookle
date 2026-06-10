@@ -250,7 +250,7 @@ export function RunbooksApp({
             onClick={(event) => event.stopPropagation()}
           >
             <h2 id="check-dialog-title" className={styles.dialogTitle}>
-              チェック結果
+              検証結果
             </h2>
             <p className={styles.dialogText}>{formatCheckSummary(checkSummary)}</p>
             {checkIssues.length === 0 ? <p className={styles.dialogText}>問題は見つかりませんでした。</p> : null}
