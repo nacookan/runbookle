@@ -1,6 +1,14 @@
 import { useMemo } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { getStartDateSortValue, isPastRunbook } from '../../lib/date';
+import {
+  compareDateParts,
+  getStartDateSortValue,
+  isCompleteEndDate,
+  isCompleteStartDate,
+  isPastRunbook,
+  todayParts,
+  type DateParts,
+} from '../../lib/date';
 import type { Runbook } from './types';
 import styles from './RunbooksApp.module.css';
 
@@ -61,6 +69,8 @@ type RunbookListProps = {
 };
 
 function RunbookList({ emptyText, runbooks, onNavigate }: RunbookListProps) {
+  const today = todayParts();
+
   if (runbooks.length === 0) {
     return <p className={styles.empty}>{emptyText}</p>;
   }
@@ -68,6 +78,8 @@ function RunbookList({ emptyText, runbooks, onNavigate }: RunbookListProps) {
   return (
     <div className={styles.list}>
       {runbooks.map((runbook) => {
+        const relativeDayLabel = createRelativeDayLabel(runbook, today);
+
         return (
           <article key={runbook.id} className={styles.runbookItem}>
             <button
@@ -80,6 +92,7 @@ function RunbookList({ emptyText, runbooks, onNavigate }: RunbookListProps) {
                 <span className={styles.rowSeparator} aria-hidden="true" />
                 <span>{runbook.title}</span>
               </span>
+              {relativeDayLabel ? <span className={styles.relativeDayBadge}>{relativeDayLabel}</span> : null}
             </button>
           </article>
         );
@@ -113,6 +126,45 @@ function createDateLabel(runbook: Runbook) {
   const endLabel = createEndLabel(runbook, startDate.year, startDate.month);
 
   return endLabel ? `${startLabel} - ${endLabel}` : startLabel;
+}
+
+function createRelativeDayLabel(runbook: Runbook, today: DateParts) {
+  if (containsDate(runbook, today)) {
+    return '今日';
+  }
+
+  if (containsDate(runbook, addDays(today, 1))) {
+    return '明日';
+  }
+
+  return null;
+}
+
+function containsDate(runbook: Runbook, date: DateParts) {
+  if (!isCompleteStartDate(runbook.startDate)) {
+    return false;
+  }
+
+  if (compareDateParts(date, runbook.startDate) < 0) {
+    return false;
+  }
+
+  if (isCompleteEndDate(runbook.endDate)) {
+    return compareDateParts(date, runbook.endDate) <= 0;
+  }
+
+  return compareDateParts(date, runbook.startDate) === 0;
+}
+
+function addDays(date: DateParts, days: number): DateParts {
+  const nextDate = new Date(date.year, date.month - 1, date.day);
+  nextDate.setDate(nextDate.getDate() + days);
+
+  return {
+    year: nextDate.getFullYear(),
+    month: nextDate.getMonth() + 1,
+    day: nextDate.getDate(),
+  };
 }
 
 function formatStartDateForRow(runbook: Runbook) {
