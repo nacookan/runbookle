@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAppRouter } from '../../lib/router';
 import { isPastRunbook } from '../../lib/date';
+import { checkForServiceWorkerUpdate, onServiceWorkerUpdateAvailable } from '../../lib/serviceWorker';
 import { RunbookEditorPage } from './RunbookEditorPage';
 import { RunbookListPage } from './RunbookListPage';
 import { NewRunbookPage } from './NewRunbookPage';
@@ -47,6 +48,7 @@ export function RunbooksApp({
   const [isCheckDialogOpen, setIsCheckDialogOpen] = useState(false);
   const [editorActions, setEditorActions] = useState<TextEditorActions | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const topbarTitle = route.name === 'new' ? '新規作成' : route.name === 'edit' ? '編集' : 'Runbookle';
   const editingRunbook = route.name === 'edit' ? runbooks.data.runbooks.find((runbook) => runbook.id === route.id) : null;
@@ -101,7 +103,7 @@ export function RunbooksApp({
   }, [route.name]);
 
   useEffect(() => {
-    if (!isSaveDialogOpen && !isCheckDialogOpen) {
+    if (!isSaveDialogOpen && !isCheckDialogOpen && !isUpdateDialogOpen) {
       return;
     }
 
@@ -109,6 +111,7 @@ export function RunbooksApp({
       if (event.key === 'Escape') {
         setIsSaveDialogOpen(false);
         setIsCheckDialogOpen(false);
+        setIsUpdateDialogOpen(false);
       }
     };
 
@@ -117,7 +120,13 @@ export function RunbooksApp({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isCheckDialogOpen, isSaveDialogOpen]);
+  }, [isCheckDialogOpen, isSaveDialogOpen, isUpdateDialogOpen]);
+
+  useEffect(() => onServiceWorkerUpdateAvailable(() => setIsUpdateDialogOpen(true)), []);
+
+  useEffect(() => {
+    checkForServiceWorkerUpdate();
+  }, [route]);
 
   useEffect(() => {
     if (!isMenuOpen) {
@@ -231,6 +240,29 @@ export function RunbooksApp({
           ) : null}
         </div>
       </header>
+
+      {isUpdateDialogOpen ? (
+        <div className={styles.dialogBackdrop} role="presentation" onClick={() => setIsUpdateDialogOpen(false)}>
+          <section
+            className={styles.dialog}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="update-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="update-dialog-title" className={styles.dialogTitle}>
+              新しいバージョンがあります
+            </h2>
+            <p className={styles.dialogText}>再読み込みすると最新バージョンを利用できます。</p>
+            <button className={styles.dialogButton} type="button" onClick={() => window.location.reload()}>
+              再読み込み
+            </button>
+            <button className={styles.dialogButton} type="button" onClick={() => setIsUpdateDialogOpen(false)}>
+              後で
+            </button>
+          </section>
+        </div>
+      ) : null}
 
       {route.name === 'edit' && isSaveDialogOpen ? (
         <div className={styles.dialogBackdrop} role="presentation" onClick={() => setIsSaveDialogOpen(false)}>

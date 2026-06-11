@@ -1,4 +1,4 @@
-const CACHE_NAME = 'runbookle-static-v1';
+const CACHE_NAME = 'runbookle-static-__BUILD_ID__';
 const APP_SCOPE = self.registration.scope;
 const PRECACHE_URLS = [APP_SCOPE, `${APP_SCOPE}manifest.webmanifest`, `${APP_SCOPE}icon.svg`];
 
