@@ -155,7 +155,7 @@ export function EditorToolbar({ onInsertDateSeparator, onInsertText, onShowValid
             }}
           >
             <SmilePlus aria-hidden="true" size={16} />
-            絵文字
+            <span className={styles.editorToolbarButtonLabel}>絵文字</span>
           </button>
           {isEmojiPickerOpen ? (
             <div className={styles.emojiPicker} role="menu" aria-label="絵文字">
@@ -189,7 +189,7 @@ export function EditorToolbar({ onInsertDateSeparator, onInsertText, onShowValid
           }}
         >
           <ClipboardList aria-hidden="true" size={16} />
-          テンプレ
+          <span className={styles.editorToolbarButtonLabel}>テンプレ</span>
         </button>
 
         <div className={styles.notationGuideWrap} ref={notationGuideRef}>
@@ -208,7 +208,7 @@ export function EditorToolbar({ onInsertDateSeparator, onInsertText, onShowValid
             }}
           >
             <Brackets aria-hidden="true" size={16} />
-            記法
+            <span className={styles.editorToolbarButtonLabel}>記法</span>
           </button>
           {isNotationGuideOpen ? (
             <div className={styles.notationGuide} style={notationGuideStyle} role="menu" aria-label="記法ガイド">
@@ -244,7 +244,7 @@ export function EditorToolbar({ onInsertDateSeparator, onInsertText, onShowValid
             }}
           >
             <ValidationStatusIcon summary={validationSummary} />
-            検証
+            <span className={styles.editorToolbarButtonLabel}>検証</span>
           </button>
         ) : null}
       </div>

@@ -473,11 +473,11 @@
 }
 
 .editorToolbar {
-  min-height: 42px;
-  padding: 0 8px;
+  min-height: 52px;
+  padding: 4px 6px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   border: 1px solid var(--color-border-strong);
   border-bottom: 0;
   border-radius: 8px 8px 0 0;
@@ -485,19 +485,26 @@
 }
 
 .editorToolbarButton {
-  min-height: 32px;
-  padding: 0 10px;
+  min-height: 44px;
+  min-width: 44px;
+  padding: 4px 6px;
   display: inline-flex;
+  flex-direction: column;
   align-items: center;
-  gap: 6px;
+  justify-content: center;
+  gap: 2px;
   border: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--color-text);
   font: inherit;
-  font-size: 0.88rem;
   font-weight: 720;
   cursor: pointer;
+}
+
+.editorToolbarButtonLabel {
+  font-size: 0.62rem;
+  line-height: 1;
 }
 
 .editorToolbarButton:hover {
