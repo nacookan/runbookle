@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   Plus,
+  RefreshCw,
   Trash2,
 } from 'lucide-react';
 import { useAppRouter } from '../../lib/router';
@@ -61,6 +62,20 @@ export function RunbooksApp({
     }
 
     void runbooks.reloadFromDrive();
+  };
+
+  const handleReloadApp = () => {
+    setIsMenuOpen(false);
+
+    if (!('serviceWorker' in navigator)) {
+      window.location.reload();
+      return;
+    }
+
+    void navigator.serviceWorker
+      .getRegistration(import.meta.env.BASE_URL)
+      .then((registration) => registration?.update())
+      .finally(() => window.location.reload());
   };
 
   const selectCheckIssue = (issue: CheckIssue) => {
@@ -204,6 +219,10 @@ export function RunbooksApp({
                   削除
                 </button>
               ) : null}
+              <button className={styles.menuItem} type="button" role="menuitem" onClick={handleReloadApp}>
+                <RefreshCw aria-hidden="true" size={18} />
+                再読み込み
+              </button>
               <button className={styles.menuItem} type="button" role="menuitem" onClick={onDisconnect}>
                 <LogOut aria-hidden="true" size={18} />
                 ログアウト
