@@ -5,9 +5,11 @@ import { EditorToolbar, type EditorValidationSummary } from './EditorToolbar';
 import { DateRangeFields } from './RunbookDateFields';
 import { TextEditor, type TextEditorActions } from './TextEditor';
 import type { Runbook, RunbookEndDate, RunbookStartDate } from './types';
+import type { RunbookAttachments } from './useRunbookAttachments';
 import styles from './RunbooksApp.module.css';
 
 type RunbookEditorPageProps = {
+  attachments: RunbookAttachments;
   id: string;
   runbooks: Runbook[];
   updateRunbook: (id: string, updater: (runbook: Runbook) => Runbook) => void;
@@ -18,6 +20,7 @@ type RunbookEditorPageProps = {
 };
 
 export function RunbookEditorPage({
+  attachments,
   id,
   runbooks,
   updateRunbook,
@@ -82,6 +85,7 @@ export function RunbookEditorPage({
     );
   }
 
+  const attachmentCount = attachments.getAttachments(runbook.id).length;
   const editorValue = editorText.runbookId === runbook.id ? editorText.value : joinTitleAndText(runbook);
   const startDateInput = dateInputs.runbookId === runbook.id && dateInputs.startDate ? dateInputs.startDate : runbook.startDate;
   const endDateInput = dateInputs.runbookId === runbook.id && dateInputs.endDate ? dateInputs.endDate : runbook.endDate;
@@ -118,8 +122,10 @@ export function RunbookEditorPage({
 
         <div className={styles.editorFrame}>
           <EditorToolbar
+            attachmentCount={attachmentCount}
             onInsertDateSeparator={editorActions?.insertDateSeparator}
             onInsertText={editorActions?.insertText}
+            onShowAttachments={() => onNavigate(`/runbooks/${encodeURIComponent(runbook.id)}/attachments`)}
             onShowValidation={onShowValidation}
             validationSummary={validationSummary}
           />

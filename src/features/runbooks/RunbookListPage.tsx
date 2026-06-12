@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { Paperclip, RefreshCw } from 'lucide-react';
 import {
   compareDateParts,
   getStartDateSortValue,
@@ -13,13 +13,14 @@ import type { Runbook } from './types';
 import styles from './RunbooksApp.module.css';
 
 type RunbookListPageProps = {
+  attachmentRunbookIds: Set<string>;
   isSyncing: boolean;
   runbooks: Runbook[];
   onNavigate: (to: string) => void;
   onSync: () => void;
 };
 
-export function RunbookListPage({ isSyncing, runbooks, onNavigate, onSync }: RunbookListPageProps) {
+export function RunbookListPage({ attachmentRunbookIds, isSyncing, runbooks, onNavigate, onSync }: RunbookListPageProps) {
   const { archivedRunbooks, upcomingRunbooks } = useMemo(
     () => splitRunbooks(runbooks),
     [runbooks],
@@ -38,6 +39,7 @@ export function RunbookListPage({ isSyncing, runbooks, onNavigate, onSync }: Run
           </button>
         </div>
         <RunbookList
+          attachmentRunbookIds={attachmentRunbookIds}
           emptyText="左上の＋ボタンから、行動メモを作成しましょう。"
           runbooks={upcomingRunbooks}
           onNavigate={onNavigate}
@@ -51,6 +53,7 @@ export function RunbookListPage({ isSyncing, runbooks, onNavigate, onSync }: Run
           </h3>
           <RunbookList
             archived
+            attachmentRunbookIds={attachmentRunbookIds}
             emptyText="アーカイブはありません。"
             runbooks={archivedRunbooks}
             onNavigate={onNavigate}
@@ -63,12 +66,13 @@ export function RunbookListPage({ isSyncing, runbooks, onNavigate, onSync }: Run
 
 type RunbookListProps = {
   archived?: boolean;
+  attachmentRunbookIds: Set<string>;
   emptyText: string;
   runbooks: Runbook[];
   onNavigate: (to: string) => void;
 };
 
-function RunbookList({ emptyText, runbooks, onNavigate }: RunbookListProps) {
+function RunbookList({ attachmentRunbookIds, emptyText, runbooks, onNavigate }: RunbookListProps) {
   const today = todayParts();
 
   if (runbooks.length === 0) {
@@ -91,6 +95,9 @@ function RunbookList({ emptyText, runbooks, onNavigate }: RunbookListProps) {
                 <span className={styles.rowDate}>{createDateLabel(runbook)}</span>
                 <span className={styles.rowSeparator} aria-hidden="true" />
                 <span>{runbook.title}</span>
+                {attachmentRunbookIds.has(runbook.id) ? (
+                  <Paperclip className={styles.runbookAttachmentIcon} aria-label="添付ファイルあり" size={14} />
+                ) : null}
               </span>
               {relativeDayLabel ? <span className={styles.relativeDayBadge}>{relativeDayLabel}</span> : null}
             </button>

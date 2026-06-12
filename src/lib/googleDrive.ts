@@ -4,6 +4,7 @@ export const RUNBOOKLE_DATA_FILE_NAME = 'runbookle-data.json';
 const DRIVE_FILES_URL = 'https://www.googleapis.com/drive/v3/files';
 const DRIVE_UPLOAD_FILES_URL = 'https://www.googleapis.com/upload/drive/v3/files';
 const JSON_MIME_TYPE = 'application/json';
+const ATTACHMENT_FIELDS = 'id,name,mimeType,size,createdTime';
 
 export type AppDataFile = {
   id: string;
@@ -16,8 +17,32 @@ export type AppDataJsonFile<T> = {
   data: T;
 };
 
+export type AttachmentFile = {
+  id: string;
+  name: string;
+  mimeType: string;
+  size: number | null;
+  createdTime: string | null;
+};
+
+export type RunbookAttachmentFile = AttachmentFile & { runbookId: string };
+
 type DriveListResponse = {
   files?: AppDataFile[];
+};
+
+type DriveAttachmentResponse = {
+  id?: string;
+  name?: string;
+  mimeType?: string;
+  size?: string;
+  createdTime?: string;
+  appProperties?: Record<string, string>;
+};
+
+type DriveAttachmentListResponse = {
+  files?: DriveAttachmentResponse[];
+  nextPageToken?: string;
 };
 
 type DriveFileResponse = {
@@ -167,6 +192,143 @@ export async function saveAppDataJsonFile<T>(
 
     throw error;
   }
+}
+
+export async function uploadRunbookAttachment(accessToken: string, runbookId: string, file: File): Promise<AttachmentFile> {
+  assertOnline();
+
+  const mimeType = file.type || 'application/octet-stream';
+  const metadata = {
+    name: file.name,
+    parents: ['appDataFolder'],
+    mimeType,
+    appProperties: { runbookId },
+  };
+  const boundary = createMultipartBoundary();
+  const body = createBinaryMultipartBody(boundary, metadata, file);
+  const searchParams = new URLSearchParams({
+    uploadType: 'multipart',
+    fields: ATTACHMENT_FIELDS,
+  });
+
+  const response = await fetchDriveJson<DriveAttachmentResponse>(`${DRIVE_UPLOAD_FILES_URL}?${searchParams.toString()}`, {
+    method: 'POST',
+    headers: {
+      ...createAuthHeaders(accessToken),
+      'Content-Type': `multipart/related; boundary=${boundary}`,
+    },
+    body,
+  });
+
+  if (!response.id) {
+    throw new GoogleDriveError('ファイルをアップロードできませんでした。', 500);
+  }
+
+  return toAttachmentFile(response, file.name, file.size, mimeType);
+}
+
+export async function listAllAttachments(accessToken: string): Promise<RunbookAttachmentFile[]> {
+  assertOnline();
+
+  const files = await fetchAppDataFiles(accessToken, 'trashed = false', `${ATTACHMENT_FIELDS},appProperties`);
+
+  return files
+    .filter(
+      (file): file is DriveAttachmentResponse & { id: string; name: string; appProperties: Record<string, string> } =>
+        Boolean(file.id && file.name && file.appProperties?.runbookId),
+    )
+    .map((file) => ({
+      ...toAttachmentFile(file),
+      runbookId: file.appProperties.runbookId,
+    }));
+}
+
+export async function getAttachmentMetadata(accessToken: string, fileId: string): Promise<AttachmentFile> {
+  assertOnline();
+
+  const searchParams = new URLSearchParams({ fields: ATTACHMENT_FIELDS });
+  const response = await fetchDriveJson<DriveAttachmentResponse>(
+    `${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}?${searchParams.toString()}`,
+    { headers: createAuthHeaders(accessToken) },
+  );
+
+  if (!response.id || !response.name) {
+    throw new GoogleDriveError('添付ファイルが見つかりません。', 404);
+  }
+
+  return toAttachmentFile(response);
+}
+
+export async function downloadAttachment(accessToken: string, fileId: string): Promise<Blob> {
+  assertOnline();
+
+  const response = await fetch(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}?alt=media`, {
+    headers: createAuthHeaders(accessToken),
+  });
+
+  await assertDriveResponse(response);
+
+  return response.blob();
+}
+
+export async function deleteAttachment(accessToken: string, fileId: string): Promise<void> {
+  assertOnline();
+
+  const response = await fetch(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
+    method: 'DELETE',
+    headers: createAuthHeaders(accessToken),
+  });
+
+  if (response.status === 404) {
+    return;
+  }
+
+  await assertDriveResponse(response);
+}
+
+async function fetchAppDataFiles(accessToken: string, query: string, fields: string): Promise<DriveAttachmentResponse[]> {
+  const files: DriveAttachmentResponse[] = [];
+  let pageToken: string | undefined;
+
+  do {
+    const searchParams = new URLSearchParams({
+      spaces: 'appDataFolder',
+      fields: `nextPageToken, files(${fields})`,
+      pageSize: '1000',
+      q: query,
+    });
+
+    if (pageToken) {
+      searchParams.set('pageToken', pageToken);
+    }
+
+    const response = await fetchDriveJson<DriveAttachmentListResponse>(`${DRIVE_FILES_URL}?${searchParams.toString()}`, {
+      headers: createAuthHeaders(accessToken),
+    });
+
+    files.push(...(response.files ?? []));
+    pageToken = response.nextPageToken;
+  } while (pageToken);
+
+  return files;
+}
+
+function toAttachmentFile(file: DriveAttachmentResponse, fallbackName?: string, fallbackSize?: number, fallbackMimeType?: string): AttachmentFile {
+  return {
+    id: file.id ?? '',
+    name: file.name ?? fallbackName ?? '',
+    mimeType: file.mimeType ?? fallbackMimeType ?? 'application/octet-stream',
+    size: file.size ? Number(file.size) : (fallbackSize ?? null),
+    createdTime: file.createdTime ?? null,
+  };
+}
+
+function createBinaryMultipartBody(boundary: string, metadata: object, file: File) {
+  const contentType = file.type || 'application/octet-stream';
+  const head = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(metadata)}\r\n--${boundary}\r\nContent-Type: ${contentType}\r\n\r\n`;
+  const tail = `\r\n--${boundary}--\r\n`;
+
+  return new Blob([head, file, tail]);
 }
 
 async function fetchDriveJson<T>(url: string, init?: RequestInit): Promise<T> {

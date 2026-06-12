@@ -14,14 +14,17 @@ import {
   RefreshCw,
   Trash2,
 } from 'lucide-react';
-import { useAppRouter } from '../../lib/router';
+import { useAppRouter, type AppRoute } from '../../lib/router';
 import { isPastRunbook } from '../../lib/date';
 import { checkForServiceWorkerUpdate, onServiceWorkerUpdateAvailable } from '../../lib/serviceWorker';
+import { RunbookAttachmentPage, type AttachmentPageActions } from './RunbookAttachmentPage';
+import { RunbookAttachmentsPage } from './RunbookAttachmentsPage';
 import { RunbookEditorPage } from './RunbookEditorPage';
 import { RunbookListPage } from './RunbookListPage';
 import { NewRunbookPage } from './NewRunbookPage';
 import { checkRunbookText, type CheckIssue } from './checkRunbookText';
 import type { TextEditorActions } from './TextEditor';
+import { useRunbookAttachments } from './useRunbookAttachments';
 import { useRunbooks, type SaveStatus } from './useRunbooks';
 import styles from './RunbooksApp.module.css';
 
@@ -49,8 +52,19 @@ export function RunbooksApp({
   const [editorActions, setEditorActions] = useState<TextEditorActions | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  const [attachmentActions, setAttachmentActions] = useState<AttachmentPageActions | null>(null);
+  const attachments = useRunbookAttachments(accessToken);
   const menuRef = useRef<HTMLDivElement>(null);
-  const topbarTitle = route.name === 'new' ? '新規作成' : route.name === 'edit' ? '編集' : 'Runbookle';
+  const topbarTitle =
+    route.name === 'new'
+      ? '新規作成'
+      : route.name === 'edit'
+        ? '編集'
+        : route.name === 'attachments'
+          ? '添付ファイル'
+          : route.name === 'attachment'
+            ? (attachmentActions?.fileName ?? '添付ファイル')
+            : 'Runbookle';
   const editingRunbook = route.name === 'edit' ? runbooks.data.runbooks.find((runbook) => runbook.id === route.id) : null;
   const canToggleArchive = editingRunbook ? !isPastRunbook(editingRunbook) : false;
   const checkIssues = useMemo(() => (editingRunbook ? checkRunbookText(editingRunbook.text) : []), [editingRunbook?.text]);
@@ -157,7 +171,7 @@ export function RunbooksApp({
               <Plus aria-hidden="true" size={20} />
             </button>
           ) : (
-            <button className={styles.topbarAction} type="button" aria-label="一覧へ戻る" onClick={() => navigate('/')}>
+            <button className={styles.topbarAction} type="button" aria-label={getBackLabel(route)} onClick={() => navigate(getBackTarget(route))}>
               <ChevronLeft aria-hidden="true" size={24} strokeWidth={2.4} />
             </button>
           )}
@@ -173,6 +187,8 @@ export function RunbooksApp({
               <span>{topbarTitle}</span>
               <SaveStatusIcon status={runbooks.saveStatus} isDriveReconnecting={isDriveReconnecting} />
             </button>
+          ) : route.name === 'attachments' || route.name === 'attachment' ? (
+            <span className={styles.titleEllipsis}>{topbarTitle}</span>
           ) : (
             <TitleText
               isDriveConnected={isDriveConnected}
@@ -226,6 +242,20 @@ export function RunbooksApp({
                 >
                   <Trash2 aria-hidden="true" size={18} />
                   削除
+                </button>
+              ) : null}
+              {route.name === 'attachment' && attachmentActions ? (
+                <button
+                  className={`${styles.menuItem} ${styles.menuItemDanger}`}
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setIsMenuOpen(false);
+                    attachmentActions.requestDelete();
+                  }}
+                >
+                  <Trash2 aria-hidden="true" size={18} />
+                  このファイルを削除
                 </button>
               ) : null}
               <button className={styles.menuItem} type="button" role="menuitem" onClick={handleReloadApp}>
@@ -334,6 +364,7 @@ export function RunbooksApp({
 
       {route.name === 'list' ? (
         <RunbookListPage
+          attachmentRunbookIds={attachments.attachmentRunbookIds}
           isSyncing={isSyncing}
           runbooks={runbooks.data.runbooks}
           onNavigate={navigate}
@@ -345,6 +376,7 @@ export function RunbooksApp({
       ) : null}
       {route.name === 'edit' ? (
         <RunbookEditorPage
+          attachments={attachments}
           id={route.id}
           runbooks={runbooks.data.runbooks}
           updateRunbook={runbooks.updateRunbook}
@@ -354,8 +386,45 @@ export function RunbooksApp({
           validationSummary={checkSummary}
         />
       ) : null}
+      {route.name === 'attachments' ? (
+        <RunbookAttachmentsPage accessToken={accessToken} attachments={attachments} id={route.id} onNavigate={navigate} />
+      ) : null}
+      {route.name === 'attachment' ? (
+        <RunbookAttachmentPage
+          accessToken={accessToken}
+          attachments={attachments}
+          id={route.id}
+          fileId={route.fileId}
+          onNavigate={navigate}
+          onActionsChange={setAttachmentActions}
+        />
+      ) : null}
     </section>
   );
+}
+
+function getBackTarget(route: AppRoute) {
+  if (route.name === 'attachment') {
+    return `/runbooks/${encodeURIComponent(route.id)}/attachments`;
+  }
+
+  if (route.name === 'attachments') {
+    return `/runbooks/${encodeURIComponent(route.id)}`;
+  }
+
+  return '/';
+}
+
+function getBackLabel(route: AppRoute) {
+  if (route.name === 'attachment') {
+    return '添付ファイル一覧へ戻る';
+  }
+
+  if (route.name === 'attachments') {
+    return '編集へ戻る';
+  }
+
+  return '一覧へ戻る';
 }
 
 function TitleText({

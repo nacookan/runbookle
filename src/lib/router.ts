@@ -10,6 +10,15 @@ export type AppRoute =
   | {
       name: 'edit';
       id: string;
+    }
+  | {
+      name: 'attachments';
+      id: string;
+    }
+  | {
+      name: 'attachment';
+      id: string;
+      fileId: string;
     };
 
 export function useAppRouter() {
@@ -44,6 +53,25 @@ function parseCurrentRoute(): AppRoute {
   if (path === '/new') {
     return {
       name: 'new',
+    };
+  }
+
+  const attachmentMatch = path.match(/^\/runbooks\/([^/]+)\/attachments\/([^/]+)$/);
+
+  if (attachmentMatch?.[1] && attachmentMatch[2]) {
+    return {
+      name: 'attachment',
+      id: decodeURIComponent(attachmentMatch[1]),
+      fileId: decodeURIComponent(attachmentMatch[2]),
+    };
+  }
+
+  const attachmentsMatch = path.match(/^\/runbooks\/([^/]+)\/attachments$/);
+
+  if (attachmentsMatch?.[1]) {
+    return {
+      name: 'attachments',
+      id: decodeURIComponent(attachmentsMatch[1]),
     };
   }
 

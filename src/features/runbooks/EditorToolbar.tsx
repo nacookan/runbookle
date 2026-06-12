@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Copy,
   Info,
+  Paperclip,
   Search,
   SearchCheck,
   SearchX,
@@ -26,8 +27,10 @@ type CopyStatus = 'idle' | 'copied' | 'error';
 type TemplateDialogStep = 'select' | 'fill';
 
 type EditorToolbarProps = {
+  attachmentCount?: number;
   onInsertDateSeparator?: () => void;
   onInsertText?: (text: string) => void;
+  onShowAttachments?: () => void;
   onShowValidation?: () => void;
   validationSummary?: EditorValidationSummary;
 };
@@ -57,7 +60,14 @@ const EMOJI_CHOICES = [
   { emoji: '🎡', label: '遊び' },
 ] as const;
 
-export function EditorToolbar({ onInsertDateSeparator, onInsertText, onShowValidation, validationSummary }: EditorToolbarProps) {
+export function EditorToolbar({
+  attachmentCount = 0,
+  onInsertDateSeparator,
+  onInsertText,
+  onShowAttachments,
+  onShowValidation,
+  validationSummary,
+}: EditorToolbarProps) {
   const [isTemplateDialogOpen, setIsTemplateDialogOpen] = useState(false);
   const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
   const [isNotationGuideOpen, setIsNotationGuideOpen] = useState(false);
@@ -231,6 +241,26 @@ export function EditorToolbar({ onInsertDateSeparator, onInsertText, onShowValid
             </div>
           ) : null}
         </div>
+
+        {onShowAttachments ? (
+          <button
+            className={styles.editorToolbarButton}
+            type="button"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => {
+              setIsEmojiPickerOpen(false);
+              setIsTemplateDialogOpen(false);
+              setIsNotationGuideOpen(false);
+              onShowAttachments();
+            }}
+          >
+            <span className={styles.attachmentIconWrap}>
+              <Paperclip aria-hidden="true" size={16} />
+              {attachmentCount > 0 ? <span className={styles.attachmentBadge}>{attachmentCount}</span> : null}
+            </span>
+            <span className={styles.editorToolbarButtonLabel}>{attachmentCount > 0 ? '添付あり' : '添付'}</span>
+          </button>
+        ) : null}
 
         {onShowValidation && validationSummary ? (
           <button
