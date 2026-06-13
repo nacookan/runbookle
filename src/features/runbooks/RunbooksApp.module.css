@@ -193,6 +193,17 @@
   background: var(--color-hover);
 }
 
+.menuItem:disabled,
+.menuItemActive:disabled {
+  color: var(--color-text-subtle);
+  cursor: default;
+}
+
+.menuItem:disabled:hover,
+.menuItemActive:disabled:hover {
+  background: transparent;
+}
+
 .dialogBackdrop {
   position: fixed;
   inset: 0;
@@ -220,6 +231,10 @@
   overflow: hidden;
 }
 
+.dataDialog {
+  width: min(100%, 420px);
+}
+
 .dialogTitle {
   margin: 0;
   color: var(--color-text-strong);
@@ -231,6 +246,21 @@
   margin: 0;
   color: var(--color-text);
   line-height: 1.5;
+}
+
+.dialogNoteList {
+  margin: 0;
+  padding-left: 1.25em;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  line-height: 1.45;
+}
+
+.dialogActionRow {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .dialogButton {
@@ -252,6 +282,15 @@
 
 .dialogButton:hover {
   background: var(--color-hover);
+}
+
+.dialogButton:disabled {
+  color: var(--color-text-subtle);
+  cursor: default;
+}
+
+.dialogButton:disabled:hover {
+  background: var(--color-surface);
 }
 
 .content {

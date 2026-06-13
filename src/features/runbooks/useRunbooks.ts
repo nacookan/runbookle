@@ -14,6 +14,7 @@ type UseRunbooksResult = {
   errorMessage: string | null;
   lastSavedAt: string | null;
   reloadFromDrive: () => Promise<void>;
+  replaceData: (nextData: RunbookleData) => Promise<void>;
   saveNow: () => Promise<void>;
   saveStatus: SaveStatus;
   setRunbookArchived: (id: string, archived: boolean) => void;
@@ -173,9 +174,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
     [updateRunbook],
   );
 
-  const saveNow = useCallback(async () => {
-    const dataToSave = dataRef.current;
-
+  const saveData = useCallback(async (dataToSave: RunbookleData) => {
     if (!accessToken) {
       saveLocalRunbookleData(dataToSave);
       dirtyRef.current = false;
@@ -219,6 +218,55 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       setSaveStatus('error');
     }
   }, [accessToken]);
+
+  const saveNow = useCallback(async () => {
+    await saveData(dataRef.current);
+  }, [saveData]);
+
+  const replaceData = useCallback(
+    async (nextData: RunbookleData) => {
+      if (!accessToken) {
+        dataRef.current = nextData;
+        dirtyRef.current = false;
+        saveLocalRunbookleData(nextData);
+        setData(nextData);
+        setLastSavedAt(nextData.updatedAt);
+        setSaveStatus('local');
+        setErrorMessage(null);
+        return;
+      }
+
+      const requestId = saveRequestIdRef.current + 1;
+      saveRequestIdRef.current = requestId;
+
+      setSaveStatus('saving');
+      setErrorMessage(null);
+
+      try {
+        const result = await saveRunbookleData(accessToken, nextData, fileIdRef.current);
+
+        if (saveRequestIdRef.current !== requestId) {
+          return;
+        }
+
+        fileIdRef.current = result.fileId;
+        dataRef.current = result.data;
+        dirtyRef.current = false;
+        saveLocalRunbookleData(result.data);
+        setData(result.data);
+        setLastSavedAt(result.data.updatedAt);
+        setSaveStatus('saved');
+      } catch (error) {
+        if (saveRequestIdRef.current === requestId) {
+          setErrorMessage(createSaveErrorMessage(error));
+          setSaveStatus('error');
+        }
+
+        throw error;
+      }
+    },
+    [accessToken],
+  );
 
   const reloadFromDrive = useCallback(async () => {
     if (!accessToken) {
@@ -284,6 +332,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       errorMessage,
       lastSavedAt,
       reloadFromDrive,
+      replaceData,
       saveNow,
       saveStatus,
       setRunbookArchived,
@@ -296,6 +345,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       errorMessage,
       lastSavedAt,
       reloadFromDrive,
+      replaceData,
       saveNow,
       saveStatus,
       setRunbookArchived,

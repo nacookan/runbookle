@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listAllAttachments, type AttachmentFile } from '../../lib/googleDrive';
+import { listAllAttachments, type AttachmentFile, type RunbookAttachmentFile } from '../../lib/googleDrive';
 import { getAttachmentErrorMessage } from './attachmentUtils';
 
 export type RunbookAttachments = {
@@ -9,6 +9,7 @@ export type RunbookAttachments = {
   getAttachments: (runbookId: string) => AttachmentFile[];
   addAttachment: (runbookId: string, file: AttachmentFile) => void;
   removeAttachment: (runbookId: string, fileId: string) => void;
+  replaceAllAttachments: (files: RunbookAttachmentFile[]) => void;
 };
 
 const EMPTY_ATTACHMENTS: AttachmentFile[] = [];
@@ -36,19 +37,7 @@ export function useRunbookAttachments(accessToken: string | null): RunbookAttach
           return;
         }
 
-        const grouped = new Map<string, AttachmentFile[]>();
-
-        for (const file of files) {
-          const list = grouped.get(file.runbookId);
-
-          if (list) {
-            list.push(file);
-          } else {
-            grouped.set(file.runbookId, [file]);
-          }
-        }
-
-        setAttachmentsByRunbookId(grouped);
+        setAttachmentsByRunbookId(groupAttachments(files));
       })
       .catch((error) => {
         if (!disposed) {
@@ -93,6 +82,12 @@ export function useRunbookAttachments(accessToken: string | null): RunbookAttach
     });
   }, []);
 
+  const replaceAllAttachments = useCallback((files: RunbookAttachmentFile[]) => {
+    setAttachmentsByRunbookId(groupAttachments(files));
+    setIsLoaded(true);
+    setErrorMessage(null);
+  }, []);
+
   const attachmentRunbookIds = useMemo(() => {
     const ids = new Set<string>();
 
@@ -112,5 +107,22 @@ export function useRunbookAttachments(accessToken: string | null): RunbookAttach
     getAttachments,
     addAttachment,
     removeAttachment,
+    replaceAllAttachments,
   };
+}
+
+function groupAttachments(files: RunbookAttachmentFile[]) {
+  const grouped = new Map<string, AttachmentFile[]>();
+
+  for (const file of files) {
+    const list = grouped.get(file.runbookId);
+
+    if (list) {
+      list.push(file);
+    } else {
+      grouped.set(file.runbookId, [file]);
+    }
+  }
+
+  return grouped;
 }

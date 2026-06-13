@@ -111,6 +111,18 @@ Drive上に `runbookle-data.json` がなければ作成し、あれば読み込�
 
 添付ファイルは `runbookle-data.json` とは別に、`appDataFolder` 内の個別ファイルとして保存します。各ファイルの `appProperties` にRunbookのIDを記録し、紐付けます。添付ファイルは `localStorage` にキャッシュせず、Drive接続時のみ利用できます。
 
+ハンバーガーメニューから、Runbookデータと添付ファイルをまとめたZIPファイルをエクスポート/インポートできます。インポートは現在のRunbookデータと添付ファイルを置き換えます。
+
+```text
+runbookle-export.zip
+  runbookle-data.json
+  attachments.json
+  attachments/
+    <runbookId>/
+      <attachmentId>/
+        <fileName>
+```
+
 ## 日付とアーカイブ
 
 Runbook の開始日は未定を許可します。`startDate.precision` は次の値です。

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import {
   AlertCircle,
   Archive,
@@ -7,22 +7,27 @@ import {
   ChevronLeft,
   Circle,
   CloudOff,
+  Database,
+  Download,
   LoaderCircle,
   LogOut,
   Menu,
   Plus,
   RefreshCw,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import { useAppRouter, type AppRoute } from '../../lib/router';
 import { isPastRunbook } from '../../lib/date';
 import { checkForServiceWorkerUpdate, onServiceWorkerUpdateAvailable } from '../../lib/serviceWorker';
+import { deleteAttachment, listAllAttachments, type RunbookAttachmentFile } from '../../lib/googleDrive';
 import { RunbookAttachmentPage, type AttachmentPageActions } from './RunbookAttachmentPage';
 import { RunbookAttachmentsPage } from './RunbookAttachmentsPage';
 import { RunbookEditorPage } from './RunbookEditorPage';
 import { RunbookListPage } from './RunbookListPage';
 import { NewRunbookPage } from './NewRunbookPage';
 import { checkRunbookText, type CheckIssue } from './checkRunbookText';
+import { createRunbookleArchive, readRunbookleArchive, uploadArchiveAttachment } from './runbookArchive';
 import type { TextEditorActions } from './TextEditor';
 import { useRunbookAttachments } from './useRunbookAttachments';
 import { useRunbooks, type SaveStatus } from './useRunbooks';
@@ -52,9 +57,14 @@ export function RunbooksApp({
   const [editorActions, setEditorActions] = useState<TextEditorActions | null>(null);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isUpdateDialogOpen, setIsUpdateDialogOpen] = useState(false);
+  const [isDataDialogOpen, setIsDataDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
+  const [archiveErrorMessage, setArchiveErrorMessage] = useState<string | null>(null);
   const [attachmentActions, setAttachmentActions] = useState<AttachmentPageActions | null>(null);
   const attachments = useRunbookAttachments(accessToken);
   const menuRef = useRef<HTMLDivElement>(null);
+  const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const topbarTitle =
     route.name === 'new'
       ? '新規作成'
@@ -94,6 +104,90 @@ export function RunbooksApp({
       .finally(() => window.location.reload());
   };
 
+  const openDataDialog = () => {
+    setIsMenuOpen(false);
+    setArchiveErrorMessage(null);
+    setIsDataDialogOpen(true);
+  };
+
+  const handleExportArchive = async () => {
+    if (!accessToken) {
+      setArchiveErrorMessage('Google Driveに接続するとエクスポートできます。');
+      return;
+    }
+
+    setIsMenuOpen(false);
+    setIsExporting(true);
+    setArchiveErrorMessage(null);
+
+    try {
+      const archive = await createRunbookleArchive(accessToken, runbooks.data);
+      downloadBlob(archive, `runbookle-export-${formatArchiveDate(new Date())}.zip`);
+    } catch (error) {
+      setArchiveErrorMessage(getArchiveErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleImportArchive = () => {
+    setIsMenuOpen(false);
+    setArchiveErrorMessage(null);
+
+    if (!accessToken) {
+      setArchiveErrorMessage('Google Driveに接続するとインポートできます。');
+      return;
+    }
+
+    importFileInputRef.current?.click();
+  };
+
+  const handleImportArchiveFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] ?? null;
+    event.target.value = '';
+
+    if (!file || !accessToken) {
+      return;
+    }
+
+    if (!window.confirm('現在のRunbookと添付ファイルを、選択したバックアップで置き換えますか？')) {
+      return;
+    }
+
+    setIsImporting(true);
+    setArchiveErrorMessage(null);
+
+    try {
+      const archive = await readRunbookleArchive(file);
+      const previousAttachments = await listAllAttachments(accessToken);
+      const uploadedAttachments: RunbookAttachmentFile[] = [];
+
+      try {
+        for (const attachment of archive.attachments) {
+          uploadedAttachments.push(await uploadArchiveAttachment(accessToken, attachment));
+        }
+
+        await runbooks.replaceData(archive.data);
+      } catch (error) {
+        await Promise.allSettled(uploadedAttachments.map((attachment) => deleteAttachment(accessToken, attachment.id)));
+        throw error;
+      }
+
+      const deleteResults = await Promise.allSettled(previousAttachments.map((attachment) => deleteAttachment(accessToken, attachment.id)));
+      attachments.replaceAllAttachments(uploadedAttachments);
+
+      if (deleteResults.some((result) => result.status === 'rejected')) {
+        setArchiveErrorMessage('インポートは完了しましたが、古い添付ファイルの削除に失敗しました。');
+      } else {
+        setIsDataDialogOpen(false);
+      }
+    } catch (error) {
+      setArchiveErrorMessage(getArchiveErrorMessage(error));
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   const selectCheckIssue = (issue: CheckIssue) => {
     setIsCheckDialogOpen(false);
 
@@ -114,10 +208,14 @@ export function RunbooksApp({
       setIsSaveDialogOpen(false);
       setIsCheckDialogOpen(false);
     }
+
+    if (route.name !== 'list') {
+      setIsDataDialogOpen(false);
+    }
   }, [route.name]);
 
   useEffect(() => {
-    if (!isSaveDialogOpen && !isCheckDialogOpen && !isUpdateDialogOpen) {
+    if (!isSaveDialogOpen && !isCheckDialogOpen && !isUpdateDialogOpen && !isDataDialogOpen) {
       return;
     }
 
@@ -126,6 +224,7 @@ export function RunbooksApp({
         setIsSaveDialogOpen(false);
         setIsCheckDialogOpen(false);
         setIsUpdateDialogOpen(false);
+        setIsDataDialogOpen(false);
       }
     };
 
@@ -134,7 +233,7 @@ export function RunbooksApp({
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isCheckDialogOpen, isSaveDialogOpen, isUpdateDialogOpen]);
+  }, [isCheckDialogOpen, isDataDialogOpen, isSaveDialogOpen, isUpdateDialogOpen]);
 
   useEffect(() => onServiceWorkerUpdateAvailable(() => setIsUpdateDialogOpen(true)), []);
 
@@ -258,6 +357,12 @@ export function RunbooksApp({
                   このファイルを削除
                 </button>
               ) : null}
+              {route.name === 'list' ? (
+                <button className={styles.menuItem} type="button" role="menuitem" onClick={openDataDialog}>
+                  <Database aria-hidden="true" size={18} />
+                  データ管理
+                </button>
+              ) : null}
               <button className={styles.menuItem} type="button" role="menuitem" onClick={handleReloadApp}>
                 <RefreshCw aria-hidden="true" size={18} />
                 再読み込み
@@ -270,6 +375,64 @@ export function RunbooksApp({
           ) : null}
         </div>
       </header>
+
+      <input
+        ref={importFileInputRef}
+        className={styles.visuallyHidden}
+        type="file"
+        accept=".zip,application/zip"
+        onChange={(event) => void handleImportArchiveFileChange(event)}
+      />
+
+      {isDataDialogOpen ? (
+        <div className={styles.dialogBackdrop} role="presentation" onClick={() => setIsDataDialogOpen(false)}>
+          <section
+            className={`${styles.dialog} ${styles.dataDialog}`}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="data-dialog-title"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <h2 id="data-dialog-title" className={styles.dialogTitle}>
+              データ管理
+            </h2>
+            <p className={styles.dialogText}>データをエクスポート/インポートできます。</p>
+            <ul className={styles.dialogNoteList}>
+              <li>インポートをすると、現時点で登録されているデータは失われてインポートしたデータに置き換わりますのでご注意ください。</li>
+              <li>エクスポートしたファイルには添付ファイルも含まれます。</li>
+            </ul>
+            {archiveErrorMessage ? <p className={styles.error}>{archiveErrorMessage}</p> : null}
+            <div className={styles.dialogActionRow}>
+              <button
+                className={styles.dialogButton}
+                type="button"
+                disabled={!accessToken || isExporting || isImporting}
+                onClick={() => void handleExportArchive()}
+              >
+                <Download aria-hidden="true" size={16} />
+                {isExporting ? 'エクスポート中...' : 'エクスポート'}
+              </button>
+              <button
+                className={styles.dialogButton}
+                type="button"
+                disabled={!accessToken || isExporting || isImporting}
+                onClick={handleImportArchive}
+              >
+                <Upload aria-hidden="true" size={16} />
+                {isImporting ? 'インポート中...' : 'インポート'}
+              </button>
+            </div>
+            {!accessToken ? (
+              <button className={styles.dialogButton} type="button" onClick={onReconnect}>
+                Google Driveに接続
+              </button>
+            ) : null}
+            <button className={styles.dialogButton} type="button" onClick={() => setIsDataDialogOpen(false)}>
+              閉じる
+            </button>
+          </section>
+        </div>
+      ) : null}
 
       {isUpdateDialogOpen ? (
         <div className={styles.dialogBackdrop} role="presentation" onClick={() => setIsUpdateDialogOpen(false)}>
@@ -551,4 +714,26 @@ function formatSavedTime(value: string | null) {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(new Date(value));
+}
+
+function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = url;
+  link.download = fileName;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function formatArchiveDate(date: Date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function getArchiveErrorMessage(error: unknown) {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'エクスポートまたはインポートに失敗しました。';
 }
