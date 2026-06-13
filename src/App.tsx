@@ -1,53 +1,42 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { Button } from './components/ui/Button';
-import { useGoogleAuth } from './features/auth/useGoogleAuth';
+import { useStorageAuth } from './features/auth/useStorageAuth';
 import { loadLocalRunbookleData } from './features/runbooks/localRunbookCache';
 import { RunbooksApp } from './features/runbooks/RunbooksApp';
 import styles from './App.module.css';
 
 function App() {
   const {
-    connect,
-    hasDriveConnectionHint,
-    hasExplicitDriveLogout,
+    client,
+    connectDropbox,
+    connectGoogle,
+    googleStatus,
+    hasConnectionHint,
+    hasExplicitLogout,
     isConnected,
-    isReconnectPending,
+    isDropboxAvailable,
+    isReconnecting,
     loginError,
     logout,
-    session,
-    status,
-  } = useGoogleAuth();
-  const silentReconnectTriedRef = useRef(false);
+    providerLabel,
+    reconnect,
+  } = useStorageAuth();
   const [hasInitialLocalCache] = useState(() => Boolean(loadLocalRunbookleData()));
-  const isLoginDisabled = status === 'loading' || status === 'missingConfig' || status === 'error';
-  const shouldShowApp = isConnected || hasDriveConnectionHint || (!hasExplicitDriveLogout && hasInitialLocalCache);
-
-  useEffect(() => {
-    if (
-      silentReconnectTriedRef.current ||
-      status !== 'ready' ||
-      isConnected ||
-      !hasDriveConnectionHint ||
-      hasExplicitDriveLogout
-    ) {
-      return;
-    }
-
-    silentReconnectTriedRef.current = true;
-    connect('', { silent: true });
-  }, [connect, hasDriveConnectionHint, hasExplicitDriveLogout, isConnected, status]);
+  const isGoogleLoginDisabled = googleStatus === 'loading' || googleStatus === 'missingConfig' || googleStatus === 'error';
+  const shouldShowApp = isConnected || hasConnectionHint || (!hasExplicitLogout && hasInitialLocalCache);
 
   return (
     <div className={styles.page}>
       <main className={`${styles.main} ${shouldShowApp ? styles.mainApp : styles.mainAuth}`}>
         {shouldShowApp ? (
           <RunbooksApp
-            accessToken={session?.accessToken ?? null}
+            client={client}
             connectionError={loginError}
-            isDriveConnected={isConnected}
-            isDriveReconnecting={isReconnectPending}
+            isStorageConnected={isConnected}
+            isStorageReconnecting={isReconnecting}
+            providerLabel={providerLabel}
             onDisconnect={logout}
-            onReconnect={() => connect('')}
+            onReconnect={reconnect}
           />
         ) : (
           <section className={styles.panel} aria-labelledby="app-title">
@@ -68,18 +57,21 @@ function App() {
             </p>
 
             <div className={styles.authArea}>
-              <p className={styles.authMessage}>Google Driveに接続してスタート</p>
-              <Button type="button" className={styles.googleButton} onClick={() => connect()} disabled={isLoginDisabled}>
+              <p className={styles.authMessage}>ストレージに接続してスタート</p>
+              <Button type="button" className={styles.connectButton} onClick={connectGoogle} disabled={isGoogleLoginDisabled}>
                 Google Driveに接続
               </Button>
+              <Button type="button" className={styles.connectButton} onClick={connectDropbox} disabled={!isDropboxAvailable}>
+                Dropboxに接続
+              </Button>
               <ul className={styles.privacyList}>
-                <li>データは、あなた自身のGoogle Driveに保存されます。</li>
+                <li>データは、あなた自身のGoogle DriveまたはDropboxに保存されます。</li>
                 <li>本サービスのサーバーには保存しません。</li>
               </ul>
-              {status === 'missingConfig' ? (
+              {googleStatus === 'missingConfig' ? (
                 <p className={styles.notice}>VITE_GOOGLE_CLIENT_ID が未設定です。.env.local を設定してください。</p>
               ) : null}
-              {status === 'loading' ? <p className={styles.notice}>Google連携を読み込んでいます。</p> : null}
+              {googleStatus === 'loading' ? <p className={styles.notice}>Google連携を読み込んでいます。</p> : null}
               {loginError ? <p className={styles.notice}>{loginError}</p> : null}
             </div>
           </section>

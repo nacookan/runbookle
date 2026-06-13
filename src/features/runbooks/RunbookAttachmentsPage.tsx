@@ -1,19 +1,19 @@
 import { useRef, useState, type ChangeEvent } from 'react';
 import { FileText, Image as ImageIcon, Paperclip, Upload } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { uploadRunbookAttachment } from '../../lib/googleDrive';
+import type { StorageClient } from '../../lib/storageClient';
 import { formatAttachmentSize, getAttachmentErrorMessage, isImageAttachment, isPdfAttachment } from './attachmentUtils';
 import type { RunbookAttachments } from './useRunbookAttachments';
 import styles from './RunbooksApp.module.css';
 
 type RunbookAttachmentsPageProps = {
-  accessToken: string | null;
   attachments: RunbookAttachments;
+  client: StorageClient | null;
   id: string;
   onNavigate: (to: string) => void;
 };
 
-export function RunbookAttachmentsPage({ accessToken, attachments, id, onNavigate }: RunbookAttachmentsPageProps) {
+export function RunbookAttachmentsPage({ attachments, client, id, onNavigate }: RunbookAttachmentsPageProps) {
   const [isUploading, setIsUploading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -23,7 +23,7 @@ export function RunbookAttachmentsPage({ accessToken, attachments, id, onNavigat
   const handleFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
     const inputFiles = event.target.files;
 
-    if (!inputFiles || inputFiles.length === 0 || !accessToken) {
+    if (!inputFiles || inputFiles.length === 0 || !client) {
       return;
     }
 
@@ -32,7 +32,7 @@ export function RunbookAttachmentsPage({ accessToken, attachments, id, onNavigat
 
     try {
       for (const file of Array.from(inputFiles)) {
-        const uploaded = await uploadRunbookAttachment(accessToken, id, file);
+        const uploaded = await client.uploadAttachment(id, file);
         attachments.addAttachment(id, uploaded);
       }
     } catch (error) {
@@ -45,8 +45,8 @@ export function RunbookAttachmentsPage({ accessToken, attachments, id, onNavigat
 
   return (
     <section className={styles.content} aria-label="添付ファイル">
-      {!accessToken ? (
-        <p className={styles.empty}>Google Driveに接続すると添付ファイルを利用できます。</p>
+      {!client ? (
+        <p className={styles.empty}>ストレージに接続すると添付ファイルを利用できます。</p>
       ) : (
         <>
           <div className={styles.attachmentUpload}>

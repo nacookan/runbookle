@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Download } from 'lucide-react';
 import { Button } from '../../components/ui/Button';
-import { deleteAttachment, downloadAttachment, getAttachmentMetadata, type AttachmentFile } from '../../lib/googleDrive';
+import type { AttachmentFile, StorageClient } from '../../lib/storageClient';
 import { formatAttachmentSize, getAttachmentErrorMessage, isImageAttachment, isPdfAttachment } from './attachmentUtils';
 import type { RunbookAttachments } from './useRunbookAttachments';
 import styles from './RunbooksApp.module.css';
@@ -12,15 +12,15 @@ export type AttachmentPageActions = {
 };
 
 type RunbookAttachmentPageProps = {
-  accessToken: string | null;
   attachments: RunbookAttachments;
+  client: StorageClient | null;
   id: string;
   fileId: string;
   onNavigate: (to: string) => void;
   onActionsChange?: (actions: AttachmentPageActions | null) => void;
 };
 
-export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, onNavigate, onActionsChange }: RunbookAttachmentPageProps) {
+export function RunbookAttachmentPage({ attachments, client, id, fileId, onNavigate, onActionsChange }: RunbookAttachmentPageProps) {
   const [metadata, setMetadata] = useState<AttachmentFile | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -29,7 +29,7 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!client) {
       setIsLoading(false);
       return;
     }
@@ -43,7 +43,8 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
     setPreviewUrl(null);
     setIsEnlarged(false);
 
-    getAttachmentMetadata(accessToken, fileId)
+    client
+      .getAttachmentMetadata(fileId)
       .then(async (file) => {
         if (disposed) {
           return;
@@ -52,7 +53,7 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
         setMetadata(file);
 
         if (isImageAttachment(file.mimeType) || isPdfAttachment(file.mimeType)) {
-          const blob = await downloadAttachment(accessToken, fileId);
+          const blob = await client.downloadAttachment(fileId);
 
           if (disposed) {
             return;
@@ -84,14 +85,14 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
         URL.revokeObjectURL(objectUrl);
       }
     };
-  }, [accessToken, fileId]);
+  }, [client, fileId]);
 
   useEffect(() => {
     if (!onActionsChange) {
       return;
     }
 
-    if (!accessToken || !metadata) {
+    if (!client || !metadata) {
       onActionsChange(null);
       return;
     }
@@ -103,7 +104,8 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
           return;
         }
 
-        deleteAttachment(accessToken, fileId)
+        client
+          .deleteAttachment(fileId)
           .then(() => {
             attachments.removeAttachment(id, fileId);
             onNavigate(`/runbooks/${encodeURIComponent(id)}/attachments`);
@@ -115,10 +117,10 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
     return () => {
       onActionsChange(null);
     };
-  }, [accessToken, attachments.removeAttachment, metadata, fileId, id, onActionsChange, onNavigate]);
+  }, [attachments.removeAttachment, client, metadata, fileId, id, onActionsChange, onNavigate]);
 
   const handleDownload = async () => {
-    if (!accessToken || !metadata) {
+    if (!client || !metadata) {
       return;
     }
 
@@ -126,7 +128,7 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
     setErrorMessage(null);
 
     try {
-      const blob = await downloadAttachment(accessToken, fileId);
+      const blob = await client.downloadAttachment(fileId);
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -140,10 +142,10 @@ export function RunbookAttachmentPage({ accessToken, attachments, id, fileId, on
     }
   };
 
-  if (!accessToken) {
+  if (!client) {
     return (
       <section className={styles.content} aria-label="添付ファイル">
-        <p className={styles.empty}>Google Driveに接続すると添付ファイルを利用できます。</p>
+        <p className={styles.empty}>ストレージに接続すると添付ファイルを利用できます。</p>
       </section>
     );
   }

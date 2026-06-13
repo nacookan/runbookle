@@ -14,13 +14,23 @@ import styles from './RunbooksApp.module.css';
 
 type RunbookListPageProps = {
   attachmentRunbookIds: Set<string>;
+  isStorageConnected: boolean;
   isSyncing: boolean;
+  providerLabel: string | null;
   runbooks: Runbook[];
   onNavigate: (to: string) => void;
   onSync: () => void;
 };
 
-export function RunbookListPage({ attachmentRunbookIds, isSyncing, runbooks, onNavigate, onSync }: RunbookListPageProps) {
+export function RunbookListPage({
+  attachmentRunbookIds,
+  isStorageConnected,
+  isSyncing,
+  providerLabel,
+  runbooks,
+  onNavigate,
+  onSync,
+}: RunbookListPageProps) {
   const { archivedRunbooks, upcomingRunbooks } = useMemo(
     () => splitRunbooks(runbooks),
     [runbooks],
@@ -60,6 +70,10 @@ export function RunbookListPage({ attachmentRunbookIds, isSyncing, runbooks, onN
           />
         </section>
       ) : null}
+
+      <p className={styles.storageFooter}>
+        {isStorageConnected && providerLabel ? `${providerLabel}に接続中` : '未接続 / ローカル保存'}
+      </p>
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { listAllAttachments, type AttachmentFile, type RunbookAttachmentFile } from '../../lib/googleDrive';
+import type { AttachmentFile, RunbookAttachmentFile, StorageClient } from '../../lib/storageClient';
 import { getAttachmentErrorMessage } from './attachmentUtils';
 
 export type RunbookAttachments = {
@@ -14,13 +14,13 @@ export type RunbookAttachments = {
 
 const EMPTY_ATTACHMENTS: AttachmentFile[] = [];
 
-export function useRunbookAttachments(accessToken: string | null): RunbookAttachments {
+export function useRunbookAttachments(client: StorageClient | null): RunbookAttachments {
   const [attachmentsByRunbookId, setAttachmentsByRunbookId] = useState<Map<string, AttachmentFile[]>>(new Map());
   const [isLoaded, setIsLoaded] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!accessToken) {
+    if (!client) {
       setAttachmentsByRunbookId(new Map());
       setIsLoaded(false);
       setErrorMessage(null);
@@ -31,7 +31,7 @@ export function useRunbookAttachments(accessToken: string | null): RunbookAttach
     setIsLoaded(false);
     setErrorMessage(null);
 
-    listAllAttachments(accessToken)
+    client.listAllAttachments()
       .then((files) => {
         if (disposed) {
           return;
@@ -53,7 +53,7 @@ export function useRunbookAttachments(accessToken: string | null): RunbookAttach
     return () => {
       disposed = true;
     };
-  }, [accessToken]);
+  }, [client]);
 
   const getAttachments = useCallback(
     (runbookId: string) => attachmentsByRunbookId.get(runbookId) ?? EMPTY_ATTACHMENTS,

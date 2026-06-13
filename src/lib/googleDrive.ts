@@ -1,3 +1,12 @@
+import {
+  assertOnline,
+  StorageError,
+  type AttachmentFile,
+  type RunbookAttachmentFile,
+  type StorageClient,
+  type StorageDataJson,
+} from './storageClient';
+
 export const DRIVE_APPDATA_SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
 export const RUNBOOKLE_DATA_FILE_NAME = 'runbookle-data.json';
 
@@ -11,21 +20,6 @@ export type AppDataFile = {
   name: string;
   modifiedTime?: string;
 };
-
-export type AppDataJsonFile<T> = {
-  fileId: string;
-  data: T;
-};
-
-export type AttachmentFile = {
-  id: string;
-  name: string;
-  mimeType: string;
-  size: number | null;
-  createdTime: string | null;
-};
-
-export type RunbookAttachmentFile = AttachmentFile & { runbookId: string };
 
 type DriveListResponse = {
   files?: AppDataFile[];
@@ -59,14 +53,26 @@ type DriveErrorResponse = {
   };
 };
 
-export class GoogleDriveError extends Error {
-  status: number;
-
+export class GoogleDriveError extends StorageError {
   constructor(message: string, status: number) {
-    super(message);
+    super(message, status);
     this.name = 'GoogleDriveError';
-    this.status = status;
   }
+}
+
+export function createGoogleDriveClient(accessToken: string): StorageClient {
+  return {
+    providerId: 'googleDrive',
+    providerLabel: 'Google Drive',
+    loadDataJson: () => loadAppDataJson(accessToken),
+    createDataJson: (json) => createAppDataJsonFile(accessToken, RUNBOOKLE_DATA_FILE_NAME, json),
+    saveDataJson: (json, knownFileRef) => saveAppDataJsonFile(accessToken, RUNBOOKLE_DATA_FILE_NAME, json, knownFileRef),
+    listAllAttachments: () => listAllAttachments(accessToken),
+    uploadAttachment: (runbookId, file) => uploadRunbookAttachment(accessToken, runbookId, file),
+    getAttachmentMetadata: (fileId) => getAttachmentMetadata(accessToken, fileId),
+    downloadAttachment: (fileId) => downloadAttachment(accessToken, fileId),
+    deleteAttachment: (fileId) => deleteAttachment(accessToken, fileId),
+  };
 }
 
 export async function findAppDataFile(accessToken: string, fileName: string): Promise<AppDataFile | null> {
@@ -86,11 +92,20 @@ export async function findAppDataFile(accessToken: string, fileName: string): Pr
   return response.files?.[0] ?? null;
 }
 
-export async function readAppDataJsonFile<T>(
-  accessToken: string,
-  fileId: string,
-  parse: (value: unknown) => T | null,
-): Promise<T> {
+async function loadAppDataJson(accessToken: string): Promise<StorageDataJson | null> {
+  const existingFile = await findAppDataFile(accessToken, RUNBOOKLE_DATA_FILE_NAME);
+
+  if (!existingFile) {
+    return null;
+  }
+
+  return {
+    json: await readAppDataJson(accessToken, existingFile.id),
+    fileRef: existingFile.id,
+  };
+}
+
+async function readAppDataJson(accessToken: string, fileId: string): Promise<unknown> {
   assertOnline();
 
   const response = await fetch(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}?alt=media`, {
@@ -99,20 +114,10 @@ export async function readAppDataJsonFile<T>(
 
   await assertDriveResponse(response);
 
-  const data = parse(await response.json());
-
-  if (!data) {
-    throw new GoogleDriveError('Drive上のデータ形式が正しくありません。', 422);
-  }
-
-  return data;
+  return response.json();
 }
 
-export async function createAppDataJsonFile<T>(
-  accessToken: string,
-  fileName: string,
-  data: T,
-): Promise<AppDataJsonFile<T>> {
+async function createAppDataJsonFile(accessToken: string, fileName: string, json: string): Promise<string> {
   assertOnline();
 
   const metadata = {
@@ -121,7 +126,7 @@ export async function createAppDataJsonFile<T>(
     mimeType: JSON_MIME_TYPE,
   };
   const boundary = createMultipartBoundary();
-  const body = createMultipartBody(boundary, metadata, data);
+  const body = createMultipartBody(boundary, metadata, json);
   const searchParams = new URLSearchParams({
     uploadType: 'multipart',
     fields: 'id,name,modifiedTime',
@@ -140,13 +145,10 @@ export async function createAppDataJsonFile<T>(
     throw new GoogleDriveError('Drive上にデータファイルを作成できませんでした。', 500);
   }
 
-  return {
-    fileId: response.id,
-    data,
-  };
+  return response.id;
 }
 
-export async function updateAppDataJsonFile<T>(accessToken: string, fileId: string, data: T): Promise<void> {
+async function updateAppDataJsonFile(accessToken: string, fileId: string, json: string): Promise<void> {
   assertOnline();
 
   const searchParams = new URLSearchParams({
@@ -162,39 +164,36 @@ export async function updateAppDataJsonFile<T>(accessToken: string, fileId: stri
         ...createAuthHeaders(accessToken),
         'Content-Type': JSON_MIME_TYPE,
       },
-      body: JSON.stringify(data),
+      body: json,
     },
   );
 }
 
-export async function saveAppDataJsonFile<T>(
+async function saveAppDataJsonFile(
   accessToken: string,
   fileName: string,
-  data: T,
+  json: string,
   knownFileId?: string | null,
-): Promise<AppDataJsonFile<T>> {
+): Promise<string> {
   const targetFileId = knownFileId ?? (await findAppDataFile(accessToken, fileName))?.id;
 
   if (!targetFileId) {
-    return createAppDataJsonFile(accessToken, fileName, data);
+    return createAppDataJsonFile(accessToken, fileName, json);
   }
 
   try {
-    await updateAppDataJsonFile(accessToken, targetFileId, data);
-    return {
-      fileId: targetFileId,
-      data,
-    };
+    await updateAppDataJsonFile(accessToken, targetFileId, json);
+    return targetFileId;
   } catch (error) {
     if (error instanceof GoogleDriveError && error.status === 404) {
-      return createAppDataJsonFile(accessToken, fileName, data);
+      return createAppDataJsonFile(accessToken, fileName, json);
     }
 
     throw error;
   }
 }
 
-export async function uploadRunbookAttachment(accessToken: string, runbookId: string, file: File): Promise<AttachmentFile> {
+async function uploadRunbookAttachment(accessToken: string, runbookId: string, file: File): Promise<AttachmentFile> {
   assertOnline();
 
   const mimeType = file.type || 'application/octet-stream';
@@ -227,7 +226,7 @@ export async function uploadRunbookAttachment(accessToken: string, runbookId: st
   return toAttachmentFile(response, file.name, file.size, mimeType);
 }
 
-export async function listAllAttachments(accessToken: string): Promise<RunbookAttachmentFile[]> {
+async function listAllAttachments(accessToken: string): Promise<RunbookAttachmentFile[]> {
   assertOnline();
 
   const files = await fetchAppDataFiles(accessToken, 'trashed = false', `${ATTACHMENT_FIELDS},appProperties`);
@@ -243,7 +242,7 @@ export async function listAllAttachments(accessToken: string): Promise<RunbookAt
     }));
 }
 
-export async function getAttachmentMetadata(accessToken: string, fileId: string): Promise<AttachmentFile> {
+async function getAttachmentMetadata(accessToken: string, fileId: string): Promise<AttachmentFile> {
   assertOnline();
 
   const searchParams = new URLSearchParams({ fields: ATTACHMENT_FIELDS });
@@ -259,7 +258,7 @@ export async function getAttachmentMetadata(accessToken: string, fileId: string)
   return toAttachmentFile(response);
 }
 
-export async function downloadAttachment(accessToken: string, fileId: string): Promise<Blob> {
+async function downloadAttachment(accessToken: string, fileId: string): Promise<Blob> {
   assertOnline();
 
   const response = await fetch(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}?alt=media`, {
@@ -271,7 +270,7 @@ export async function downloadAttachment(accessToken: string, fileId: string): P
   return response.blob();
 }
 
-export async function deleteAttachment(accessToken: string, fileId: string): Promise<void> {
+async function deleteAttachment(accessToken: string, fileId: string): Promise<void> {
   assertOnline();
 
   const response = await fetch(`${DRIVE_FILES_URL}/${encodeURIComponent(fileId)}`, {
@@ -363,12 +362,6 @@ function createAuthHeaders(accessToken: string): HeadersInit {
   };
 }
 
-function assertOnline() {
-  if (typeof navigator !== 'undefined' && !navigator.onLine) {
-    throw new GoogleDriveError('オフラインのためGoogle Driveに保存できません。ローカルキャッシュには残っています。', 0);
-  }
-}
-
 function escapeDriveQueryValue(value: string) {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 }
@@ -381,7 +374,7 @@ function createMultipartBoundary() {
   return `runbookle-${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
-function createMultipartBody(boundary: string, metadata: object, data: unknown) {
+function createMultipartBody(boundary: string, metadata: object, json: string) {
   return [
     `--${boundary}`,
     'Content-Type: application/json; charset=UTF-8',
@@ -390,7 +383,7 @@ function createMultipartBody(boundary: string, metadata: object, data: unknown) 
     `--${boundary}`,
     'Content-Type: application/json; charset=UTF-8',
     '',
-    JSON.stringify(data),
+    json,
     `--${boundary}--`,
     '',
   ].join('\r\n');

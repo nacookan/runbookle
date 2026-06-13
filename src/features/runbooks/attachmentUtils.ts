@@ -1,4 +1,4 @@
-import { GoogleDriveError } from '../../lib/googleDrive';
+import { StorageError } from '../../lib/storageClient';
 
 export function formatAttachmentSize(size: number | null) {
   if (size === null) {
@@ -25,9 +25,9 @@ export function isPdfAttachment(mimeType: string) {
 }
 
 export function getAttachmentErrorMessage(error: unknown) {
-  if (error instanceof GoogleDriveError) {
+  if (error instanceof StorageError) {
     if (error.status === 401) {
-      return 'Google Driveの認可が期限切れです。ログアウトして接続し直してください。';
+      return 'ストレージの認可が期限切れです。接続し直してください。';
     }
 
     return error.message;

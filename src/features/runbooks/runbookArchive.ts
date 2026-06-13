@@ -1,9 +1,4 @@
-import {
-  downloadAttachment,
-  listAllAttachments,
-  uploadRunbookAttachment,
-  type RunbookAttachmentFile,
-} from '../../lib/googleDrive';
+import type { RunbookAttachmentFile, StorageClient } from '../../lib/storageClient';
 import { createZip, readZip, readZipText, type ZipEntrySource } from '../../lib/zip';
 import { parseRunbookleData } from './model';
 import type { RunbookleData } from './types';
@@ -40,9 +35,9 @@ type AttachmentManifestItem = {
 const ATTACHMENTS_MANIFEST_FILE_NAME = 'attachments.json';
 const RUNBOOKLE_DATA_FILE_NAME = 'runbookle-data.json';
 
-export async function createRunbookleArchive(accessToken: string, data: RunbookleData): Promise<Blob> {
+export async function createRunbookleArchive(client: StorageClient, data: RunbookleData): Promise<Blob> {
   const runbookIds = new Set(data.runbooks.map((runbook) => runbook.id));
-  const attachments = (await listAllAttachments(accessToken))
+  const attachments = (await client.listAllAttachments())
     .filter((attachment) => runbookIds.has(attachment.runbookId))
     .sort((a, b) => a.runbookId.localeCompare(b.runbookId) || a.name.localeCompare(b.name));
   const usedPaths = new Set<string>([RUNBOOKLE_DATA_FILE_NAME, ATTACHMENTS_MANIFEST_FILE_NAME]);
@@ -55,7 +50,7 @@ export async function createRunbookleArchive(accessToken: string, data: Runbookl
   ];
 
   for (const attachment of attachments) {
-    const blob = await downloadAttachment(accessToken, attachment.id);
+    const blob = await client.downloadAttachment(attachment.id);
     const path = createAttachmentPath(attachment, usedPaths);
 
     usedPaths.add(path);
@@ -133,11 +128,11 @@ export async function readRunbookleArchive(file: File): Promise<RunbookleArchive
 }
 
 export async function uploadArchiveAttachment(
-  accessToken: string,
+  client: StorageClient,
   attachment: RunbookleArchiveAttachment,
 ): Promise<RunbookAttachmentFile> {
   const file = new File([attachment.blob], attachment.name, { type: attachment.mimeType });
-  const uploaded = await uploadRunbookAttachment(accessToken, attachment.runbookId, file);
+  const uploaded = await client.uploadAttachment(attachment.runbookId, file);
 
   return {
     ...uploaded,

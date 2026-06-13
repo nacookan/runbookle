@@ -3,7 +3,7 @@
 Runbookle は [https://nacookan.github.io/runbookle/](https://nacookan.github.io/runbookle/) で利用できます。
 PWAとしてホーム画面に追加して使うのがおすすめです。iPhoneのSafariでは、共有メニューから「ホーム画面に追加」を選んでください。
 
-Runbookle は、1日または数日間の行動予定を作るためのWebアプリです。旅行、出張、イベント参加日、複数予定がある日などに使う、時刻付きの行動メモ / 進行表に近いアプリを目指します。データはユーザー自身の Google Drive に保存します。
+Runbookle は、1日または数日間の行動予定を作るためのWebアプリです。旅行、出張、イベント参加日、複数予定がある日などに使う、時刻付きの行動メモ / 進行表に近いアプリを目指します。データはユーザー自身の Google Drive または Dropbox に保存します（接続時にどちらかを選択）。
 
 ユーザー名、メールアドレス、プロフィール画像は取得しません。作者のサーバーや作者のDBにも、ユーザーのメモや予定データを保存しません。
 
@@ -20,6 +20,7 @@ Runbookle は、1日または数日間の行動予定を作るためのWebアプ
 - GitHub Actions
 - Google Identity Services
 - Google Drive API v3
+- Dropbox API v2
 
 ## ローカル開発
 
@@ -36,15 +37,16 @@ http://localhost:5173/runbookle/
 
 ## .env.local
 
-ローカル開発では `.env.local` を作成し、Google OAuth Client ID を設定します。
+ローカル開発では `.env.local` を作成し、Google OAuth Client ID と Dropbox App Key を設定します。
 
 ```env
 VITE_GOOGLE_CLIENT_ID=xxxxxxxxxxxx-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com
+VITE_DROPBOX_APP_KEY=xxxxxxxxxxxxxxx
 ```
 
-`VITE_GOOGLE_CLIENT_ID` は Google Identity Services のブラウザ向けOAuth連携に使う OAuth Client ID です。Client ID は秘密情報ではありませんが、環境ごとの差し替えを容易にし、ソースコードへ直書きしない方針です。
+`VITE_GOOGLE_CLIENT_ID` は Google Identity Services のブラウザ向けOAuth連携に使う OAuth Client ID です。`VITE_DROPBOX_APP_KEY` は Dropbox OAuth (PKCE) に使う App Key です。どちらも秘密情報ではありませんが、環境ごとの差し替えを容易にし、ソースコードへ直書きしない方針です。未設定のプロバイダの接続ボタンは無効になります。
 
-Client Secret は静的ホスティングのブラウザアプリでは使いません。ソースコード、環境変数、GitHub Actions のいずれにも設定しないでください。
+Client Secret / App Secret は静的ホスティングのブラウザアプリでは使いません。ソースコード、環境変数、GitHub Actions のいずれにも設定しないでください。
 
 ## Google Cloud Console のOAuth設定
 
@@ -59,7 +61,26 @@ Google Cloud Console で OAuth クライアントを作成し、Google Drive API
 
 GitHub Pages の公開URLが `https://<GitHubユーザー名>.github.io/runbookle/` の場合でも、承認済み JavaScript 生成元には origin の `https://<GitHubユーザー名>.github.io` を登録します。
 
-## Google Drive 保存
+## Dropbox App Console のOAuth設定
+
+[Dropbox App Console](https://www.dropbox.com/developers/apps) でアプリを作成します。
+
+- アクセスタイプ: App folder（アプリ専用フォルダのみアクセス）
+- Permissions: `files.metadata.read`、`files.content.read`、`files.content.write`
+- Redirect URIs:
+  - `http://localhost:5173/runbookle/`
+  - `http://127.0.0.1:5173/runbookle/`
+  - `https://<GitHubユーザー名>.github.io/runbookle/`
+
+Redirect URI は末尾のスラッシュまで完全一致で登録します。認可は authorization code flow + PKCE を使い、App Secret は使いません。`token_access_type=offline` で refresh token を取得するため、Google Driveと違って接続が長期間維持されます。
+
+作成直後のアプリは Development ステータスで、接続できるユーザーは500人までです。
+
+## ストレージ保存
+
+接続時に Google Drive と Dropbox のどちらかを選択します。同時利用はできません。プロバイダ間でデータを移す場合は、ZIPエクスポート/インポートを使います。
+
+### Google Drive
 
 Google Drive API v3 を使い、ユーザー本人の Google Drive `appDataFolder` に次のファイルを保存します。
 
@@ -74,6 +95,21 @@ https://www.googleapis.com/auth/drive.appdata
 ```
 
 `drive.appdata` は、アプリ専用の隠しデータ領域である `appDataFolder` へアクセスするためのスコープです。通常のDriveファイル全体へのアクセス権限は要求しません。また、ユーザー名、メールアドレス、プロフィール画像を取得するスコープも要求しません。
+
+添付ファイルは `runbookle-data.json` とは別に、`appDataFolder` 内の個別ファイルとして保存します。各ファイルの `appProperties` にRunbookのIDを記録し、紐付けます。
+
+### Dropbox
+
+Dropbox API v2 を使い、App folder（ユーザーのDropbox内 `アプリ/<アプリ名>/`）に保存します。Google Driveの `appDataFolder` と違い、このフォルダはユーザーから見えます。
+
+```text
+/runbookle-data.json
+/attachments/<runbookId>/<ファイル名>
+```
+
+同名ファイルをアップロードした場合は、Dropboxのautorenameで `name (1).ext` のような名前になります。Dropboxのメタデータには mimeType がないため、プレビュー判定は拡張子から推定します。
+
+### 保存形式
 
 保存形式はJSONです。
 
@@ -107,9 +143,7 @@ https://www.googleapis.com/auth/drive.appdata
 }
 ```
 
-Drive上に `runbookle-data.json` がなければ作成し、あれば読み込みます。入力内容は `localStorage` にもキャッシュし、Drive読み込み前や保存失敗時にも最後のローカル内容を表示できるようにしています。
-
-添付ファイルは `runbookle-data.json` とは別に、`appDataFolder` 内の個別ファイルとして保存します。各ファイルの `appProperties` にRunbookのIDを記録し、紐付けます。添付ファイルは `localStorage` にキャッシュせず、Drive接続時のみ利用できます。
+ストレージ上に `runbookle-data.json` がなければ作成し、あれば読み込みます。入力内容は `localStorage` にもキャッシュし、読み込み前や保存失敗時にも最後のローカル内容を表示できるようにしています。添付ファイルは `localStorage` にキャッシュせず、ストレージ接続時のみ利用できます。
 
 ハンバーガーメニューから、Runbookデータと添付ファイルをまとめたZIPファイルをエクスポート/インポートできます。インポートは現在のRunbookデータと添付ファイルを置き換えます。
 
@@ -178,9 +212,10 @@ GitHub Actions の Variables に次を登録します。
 
 ```text
 VITE_GOOGLE_CLIENT_ID
+VITE_DROPBOX_APP_KEY
 ```
 
-登録場所は Repository settings の `Secrets and variables` -> `Actions` -> `Variables` です。Client ID は秘密情報ではないため Variables で扱います。
+登録場所は Repository settings の `Secrets and variables` -> `Actions` -> `Variables` です。Client ID / App Key は秘密情報ではないため Variables で扱います。
 
 `main` ブランチへ push すると、`.github/workflows/deploy.yml` が `npm ci`、`npm run build` を実行し、`dist` を GitHub Pages にデプロイします。
 

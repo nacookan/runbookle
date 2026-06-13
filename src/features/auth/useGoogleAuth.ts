@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { googleClientId } from '../../lib/env';
 import { DRIVE_APPDATA_SCOPE } from '../../lib/googleDrive';
-import { loadHadDriveConnection, loadHasExplicitDriveLogout, markDriveConnected, markDriveLoggedOut } from './connectionHistory';
+import { loadHadGoogleDriveConnection, loadHasExplicitStorageLogout, markGoogleDriveConnected, markStorageLoggedOut } from './connectionHistory';
 import { loadGoogleIdentity, type GoogleTokenClient } from './googleIdentity';
 import { clearSessionToken, loadSessionToken, saveSessionToken } from './sessionTokenCache';
 import type { GoogleSession } from './types';
 
-type AuthStatus = 'idle' | 'loading' | 'ready' | 'missingConfig' | 'error';
+export type GoogleAuthStatus = 'idle' | 'loading' | 'ready' | 'missingConfig' | 'error';
+
 type ConnectOptions = {
   silent?: boolean;
 };
@@ -16,10 +17,10 @@ export function useGoogleAuth() {
   const silentRequestRef = useRef(false);
   const silentTimeoutRef = useRef<number | null>(null);
   const [session, setSession] = useState<GoogleSession | null>(loadSessionToken);
-  const [hasDriveConnectionHint, setHasDriveConnectionHint] = useState(loadHadDriveConnection);
-  const [hasExplicitDriveLogout, setHasExplicitDriveLogout] = useState(loadHasExplicitDriveLogout);
+  const [hasDriveConnectionHint, setHasDriveConnectionHint] = useState(loadHadGoogleDriveConnection);
+  const [hasExplicitDriveLogout, setHasExplicitDriveLogout] = useState(loadHasExplicitStorageLogout);
   const [isReconnectPending, setIsReconnectPending] = useState(false);
-  const [status, setStatus] = useState<AuthStatus>('idle');
+  const [status, setStatus] = useState<GoogleAuthStatus>('idle');
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const clearSilentReconnect = useCallback(() => {
@@ -77,7 +78,7 @@ export function useGoogleAuth() {
 
             setSession(nextSession);
             saveSessionToken(nextSession);
-            markDriveConnected();
+            markGoogleDriveConnected();
             setHasDriveConnectionHint(true);
             setHasExplicitDriveLogout(false);
             setLoginError(null);
@@ -158,7 +159,7 @@ export function useGoogleAuth() {
     setSession(null);
     clearSessionToken();
     clearSilentReconnect();
-    markDriveLoggedOut();
+    markStorageLoggedOut();
     setHasDriveConnectionHint(false);
     setHasExplicitDriveLogout(true);
 

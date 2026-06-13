@@ -20,7 +20,7 @@ import {
 import { useAppRouter, type AppRoute } from '../../lib/router';
 import { isPastRunbook } from '../../lib/date';
 import { checkForServiceWorkerUpdate, onServiceWorkerUpdateAvailable } from '../../lib/serviceWorker';
-import { deleteAttachment, listAllAttachments, type RunbookAttachmentFile } from '../../lib/googleDrive';
+import type { RunbookAttachmentFile, StorageClient } from '../../lib/storageClient';
 import { RunbookAttachmentPage, type AttachmentPageActions } from './RunbookAttachmentPage';
 import { RunbookAttachmentsPage } from './RunbookAttachmentsPage';
 import { RunbookEditorPage } from './RunbookEditorPage';
@@ -34,23 +34,25 @@ import { useRunbooks, type SaveStatus } from './useRunbooks';
 import styles from './RunbooksApp.module.css';
 
 type RunbooksAppProps = {
-  accessToken: string | null;
+  client: StorageClient | null;
   connectionError: string | null;
-  isDriveConnected: boolean;
-  isDriveReconnecting: boolean;
+  isStorageConnected: boolean;
+  isStorageReconnecting: boolean;
+  providerLabel: string | null;
   onDisconnect: () => void;
   onReconnect: () => void;
 };
 
 export function RunbooksApp({
-  accessToken,
+  client,
   connectionError,
-  isDriveConnected,
-  isDriveReconnecting,
+  isStorageConnected,
+  isStorageReconnecting,
+  providerLabel,
   onDisconnect,
   onReconnect,
 }: RunbooksAppProps) {
-  const runbooks = useRunbooks(accessToken);
+  const runbooks = useRunbooks(client);
   const { navigate, route } = useAppRouter();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCheckDialogOpen, setIsCheckDialogOpen] = useState(false);
@@ -62,7 +64,7 @@ export function RunbooksApp({
   const [isImporting, setIsImporting] = useState(false);
   const [archiveErrorMessage, setArchiveErrorMessage] = useState<string | null>(null);
   const [attachmentActions, setAttachmentActions] = useState<AttachmentPageActions | null>(null);
-  const attachments = useRunbookAttachments(accessToken);
+  const attachments = useRunbookAttachments(client);
   const menuRef = useRef<HTMLDivElement>(null);
   const importFileInputRef = useRef<HTMLInputElement | null>(null);
   const topbarTitle =
@@ -79,15 +81,15 @@ export function RunbooksApp({
   const canToggleArchive = editingRunbook ? !isPastRunbook(editingRunbook) : false;
   const checkIssues = useMemo(() => (editingRunbook ? checkRunbookText(editingRunbook.text) : []), [editingRunbook?.text]);
   const checkSummary = useMemo(() => createCheckSummary(checkIssues), [checkIssues]);
-  const isSyncing = isDriveReconnecting || runbooks.saveStatus === 'loading';
+  const isSyncing = isStorageReconnecting || runbooks.saveStatus === 'loading';
 
   const handleSync = () => {
-    if (!isDriveConnected) {
+    if (!isStorageConnected) {
       onReconnect();
       return;
     }
 
-    void runbooks.reloadFromDrive();
+    void runbooks.reloadFromStorage();
   };
 
   const handleReloadApp = () => {
@@ -111,8 +113,8 @@ export function RunbooksApp({
   };
 
   const handleExportArchive = async () => {
-    if (!accessToken) {
-      setArchiveErrorMessage('Google Driveに接続するとエクスポートできます。');
+    if (!client) {
+      setArchiveErrorMessage('ストレージに接続するとエクスポートできます。');
       return;
     }
 
@@ -121,7 +123,7 @@ export function RunbooksApp({
     setArchiveErrorMessage(null);
 
     try {
-      const archive = await createRunbookleArchive(accessToken, runbooks.data);
+      const archive = await createRunbookleArchive(client, runbooks.data);
       downloadBlob(archive, `runbookle-export-${formatArchiveDate(new Date())}.zip`);
     } catch (error) {
       setArchiveErrorMessage(getArchiveErrorMessage(error));
@@ -134,8 +136,8 @@ export function RunbooksApp({
     setIsMenuOpen(false);
     setArchiveErrorMessage(null);
 
-    if (!accessToken) {
-      setArchiveErrorMessage('Google Driveに接続するとインポートできます。');
+    if (!client) {
+      setArchiveErrorMessage('ストレージに接続するとインポートできます。');
       return;
     }
 
@@ -146,11 +148,11 @@ export function RunbooksApp({
     const file = event.target.files?.[0] ?? null;
     event.target.value = '';
 
-    if (!file || !accessToken) {
+    if (!file || !client) {
       return;
     }
 
-    if (!window.confirm('現在のRunbookと添付ファイルを、選択したバックアップで置き換えますか？')) {
+    if (!window.confirm('データを、選択したファイルで置き換えますか？')) {
       return;
     }
 
@@ -159,21 +161,21 @@ export function RunbooksApp({
 
     try {
       const archive = await readRunbookleArchive(file);
-      const previousAttachments = await listAllAttachments(accessToken);
+      const previousAttachments = await client.listAllAttachments();
       const uploadedAttachments: RunbookAttachmentFile[] = [];
 
       try {
         for (const attachment of archive.attachments) {
-          uploadedAttachments.push(await uploadArchiveAttachment(accessToken, attachment));
+          uploadedAttachments.push(await uploadArchiveAttachment(client, attachment));
         }
 
         await runbooks.replaceData(archive.data);
       } catch (error) {
-        await Promise.allSettled(uploadedAttachments.map((attachment) => deleteAttachment(accessToken, attachment.id)));
+        await Promise.allSettled(uploadedAttachments.map((attachment) => client.deleteAttachment(attachment.id)));
         throw error;
       }
 
-      const deleteResults = await Promise.allSettled(previousAttachments.map((attachment) => deleteAttachment(accessToken, attachment.id)));
+      const deleteResults = await Promise.allSettled(previousAttachments.map((attachment) => client.deleteAttachment(attachment.id)));
       attachments.replaceAllAttachments(uploadedAttachments);
 
       if (deleteResults.some((result) => result.status === 'rejected')) {
@@ -280,18 +282,18 @@ export function RunbooksApp({
             <button
               className={styles.titleButton}
               type="button"
-              aria-label={`保存状態: ${getSaveStatusLabel(runbooks.saveStatus, isDriveReconnecting)}。保存日時を表示`}
+              aria-label={`保存状態: ${getSaveStatusLabel(runbooks.saveStatus, isStorageReconnecting)}。保存日時を表示`}
               onClick={() => setIsSaveDialogOpen(true)}
             >
               <span>{topbarTitle}</span>
-              <SaveStatusIcon status={runbooks.saveStatus} isDriveReconnecting={isDriveReconnecting} />
+              <SaveStatusIcon status={runbooks.saveStatus} isStorageReconnecting={isStorageReconnecting} />
             </button>
           ) : route.name === 'attachments' || route.name === 'attachment' ? (
             <span className={styles.titleEllipsis}>{topbarTitle}</span>
           ) : (
             <TitleText
-              isDriveConnected={isDriveConnected}
-              isDriveReconnecting={isDriveReconnecting}
+              isStorageConnected={isStorageConnected}
+              isStorageReconnecting={isStorageReconnecting}
               title={topbarTitle}
               onReconnect={onReconnect}
             />
@@ -406,7 +408,7 @@ export function RunbooksApp({
               <button
                 className={styles.dialogButton}
                 type="button"
-                disabled={!accessToken || isExporting || isImporting}
+                disabled={!client || isExporting || isImporting}
                 onClick={() => void handleExportArchive()}
               >
                 <Download aria-hidden="true" size={16} />
@@ -415,16 +417,16 @@ export function RunbooksApp({
               <button
                 className={styles.dialogButton}
                 type="button"
-                disabled={!accessToken || isExporting || isImporting}
+                disabled={!client || isExporting || isImporting}
                 onClick={handleImportArchive}
               >
                 <Upload aria-hidden="true" size={16} />
                 {isImporting ? 'インポート中...' : 'インポート'}
               </button>
             </div>
-            {!accessToken ? (
+            {!client ? (
               <button className={styles.dialogButton} type="button" onClick={onReconnect}>
-                Google Driveに接続
+                {providerLabel ?? 'ストレージ'}に接続
               </button>
             ) : null}
             <button className={styles.dialogButton} type="button" onClick={() => setIsDataDialogOpen(false)}>
@@ -469,11 +471,11 @@ export function RunbooksApp({
             <h2 id="save-dialog-title" className={styles.dialogTitle}>
               保存状態
             </h2>
-            <p className={styles.dialogText}>{getSaveStatusLabel(runbooks.saveStatus, isDriveReconnecting)}</p>
+            <p className={styles.dialogText}>{getSaveStatusLabel(runbooks.saveStatus, isStorageReconnecting)}</p>
             <p className={styles.dialogText}>最終保存: {formatSavedTime(runbooks.lastSavedAt)}</p>
-            {!isDriveConnected ? (
+            {!isStorageConnected ? (
               <button className={styles.dialogButton} type="button" onClick={onReconnect}>
-                Google Driveに接続
+                {providerLabel ?? 'ストレージ'}に接続
               </button>
             ) : null}
             {runbooks.errorMessage ? <p className={styles.error}>{runbooks.errorMessage}</p> : null}
@@ -528,7 +530,9 @@ export function RunbooksApp({
       {route.name === 'list' ? (
         <RunbookListPage
           attachmentRunbookIds={attachments.attachmentRunbookIds}
+          isStorageConnected={isStorageConnected}
           isSyncing={isSyncing}
+          providerLabel={providerLabel}
           runbooks={runbooks.data.runbooks}
           onNavigate={navigate}
           onSync={handleSync}
@@ -550,12 +554,12 @@ export function RunbooksApp({
         />
       ) : null}
       {route.name === 'attachments' ? (
-        <RunbookAttachmentsPage accessToken={accessToken} attachments={attachments} id={route.id} onNavigate={navigate} />
+        <RunbookAttachmentsPage attachments={attachments} client={client} id={route.id} onNavigate={navigate} />
       ) : null}
       {route.name === 'attachment' ? (
         <RunbookAttachmentPage
-          accessToken={accessToken}
           attachments={attachments}
+          client={client}
           id={route.id}
           fileId={route.fileId}
           onNavigate={navigate}
@@ -591,17 +595,17 @@ function getBackLabel(route: AppRoute) {
 }
 
 function TitleText({
-  isDriveConnected,
-  isDriveReconnecting,
+  isStorageConnected,
+  isStorageReconnecting,
   onReconnect,
   title,
 }: {
-  isDriveConnected: boolean;
-  isDriveReconnecting: boolean;
+  isStorageConnected: boolean;
+  isStorageReconnecting: boolean;
   onReconnect: () => void;
   title: string;
 }) {
-  if (isDriveConnected) {
+  if (isStorageConnected) {
     return title;
   }
 
@@ -609,11 +613,11 @@ function TitleText({
     <button
       className={styles.titleButton}
       type="button"
-      aria-label={isDriveReconnecting ? 'Google Drive接続を確認中' : 'Google Driveに再接続'}
+      aria-label={isStorageReconnecting ? 'ストレージ接続を確認中' : 'ストレージに再接続'}
       onClick={onReconnect}
     >
       <span>{title}</span>
-      {isDriveReconnecting ? (
+      {isStorageReconnecting ? (
         <LoaderCircle className={`${styles.titleStatusIcon} ${styles.titleStatusIconSpinning}`} aria-hidden="true" size={16} />
       ) : (
         <CloudOff className={styles.titleStatusIconDisconnected} aria-hidden="true" size={16} />
@@ -622,8 +626,8 @@ function TitleText({
   );
 }
 
-function SaveStatusIcon({ isDriveReconnecting, status }: { isDriveReconnecting: boolean; status: SaveStatus }) {
-  if (isDriveReconnecting) {
+function SaveStatusIcon({ isStorageReconnecting, status }: { isStorageReconnecting: boolean; status: SaveStatus }) {
+  if (isStorageReconnecting) {
     return <LoaderCircle className={`${styles.titleStatusIcon} ${styles.titleStatusIconSpinning}`} aria-hidden="true" size={16} />;
   }
 
@@ -688,9 +692,9 @@ function getIssueTypeLabel(issue: CheckIssue) {
   return '情報';
 }
 
-function getSaveStatusLabel(status: SaveStatus, isDriveReconnecting = false) {
-  if (isDriveReconnecting) {
-    return 'Google Drive接続を確認中';
+function getSaveStatusLabel(status: SaveStatus, isStorageReconnecting = false) {
+  if (isStorageReconnecting) {
+    return 'ストレージ接続を確認中';
   }
 
   const labels: Record<SaveStatus, string> = {
@@ -699,7 +703,7 @@ function getSaveStatusLabel(status: SaveStatus, isDriveReconnecting = false) {
     saved: '保存済み',
     dirty: '未保存',
     error: '保存失敗',
-    local: 'Drive未接続 / ローカル保存',
+    local: '未接続 / ローカル保存',
   };
 
   return labels[status];

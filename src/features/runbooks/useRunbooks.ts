@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { GoogleDriveError } from '../../lib/googleDrive';
-import { loadLocalRunbookleData, saveLocalRunbookleData } from './localRunbookCache';
+import { StorageError, type StorageClient } from '../../lib/storageClient';
+import { loadLocalDataProvider, loadLocalRunbookleData, saveLocalDataProvider, saveLocalRunbookleData } from './localRunbookCache';
 import { createEmptyRunbookleData, createRunbook, createRunbookleData } from './model';
-import { loadOrCreateRunbookleData, saveRunbookleData } from './driveRunbookStorage';
+import { loadOrCreateRunbookleData, saveRunbookleData } from './runbookStorage';
 import type { Runbook, RunbookDraft, RunbookleData } from './types';
 
 export type SaveStatus = 'loading' | 'saving' | 'saved' | 'dirty' | 'error' | 'local';
@@ -13,7 +13,7 @@ type UseRunbooksResult = {
   deleteRunbook: (id: string) => void;
   errorMessage: string | null;
   lastSavedAt: string | null;
-  reloadFromDrive: () => Promise<void>;
+  reloadFromStorage: () => Promise<void>;
   replaceData: (nextData: RunbookleData) => Promise<void>;
   saveNow: () => Promise<void>;
   saveStatus: SaveStatus;
@@ -23,14 +23,14 @@ type UseRunbooksResult = {
 
 const AUTOSAVE_DELAY_MS = 1000;
 
-export function useRunbooks(accessToken: string | null): UseRunbooksResult {
+export function useRunbooks(client: StorageClient | null): UseRunbooksResult {
   const initialLocalData = useRef<RunbookleData | null>(loadLocalRunbookleData());
   const [data, setData] = useState<RunbookleData>(initialLocalData.current ?? createEmptyRunbookleData());
-  const [saveStatus, setSaveStatus] = useState<SaveStatus>(accessToken ? 'loading' : 'local');
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>(client ? 'loading' : 'local');
   const [lastSavedAt, setLastSavedAt] = useState<string | null>(initialLocalData.current?.updatedAt ?? null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const dataRef = useRef(data);
-  const fileIdRef = useRef<string | null>(null);
+  const fileRefRef = useRef<string | null>(null);
   const dirtyRef = useRef(false);
   const loadRequestIdRef = useRef(0);
   const saveRequestIdRef = useRef(0);
@@ -40,47 +40,62 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
   }, [data]);
 
   useEffect(() => {
-    if (!accessToken) {
-      fileIdRef.current = null;
+    if (!client) {
+      fileRefRef.current = null;
       setErrorMessage(null);
       setSaveStatus('local');
       return;
     }
 
     let disposed = false;
-    const fallbackData = dataRef.current ?? initialLocalData.current ?? createEmptyRunbookleData();
+
+    // ローカルキャッシュは同じプロバイダのものだけ引き継ぐ。
+    // プロバイダを切り替えた場合は、前のプロバイダのデータを持ち込まず空から始める。
+    const isSameProviderCache = loadLocalDataProvider() === client.providerId;
+    const fallbackData = isSameProviderCache
+      ? (dataRef.current ?? initialLocalData.current ?? createEmptyRunbookleData())
+      : createEmptyRunbookleData();
+
+    if (!isSameProviderCache) {
+      dataRef.current = fallbackData;
+      dirtyRef.current = false;
+      setData(fallbackData);
+    }
 
     setSaveStatus('loading');
     setErrorMessage(null);
 
-    loadOrCreateRunbookleData(accessToken, fallbackData)
-      .then(({ data: driveData, fileId }) => {
+    loadOrCreateRunbookleData(client, fallbackData)
+      .then(({ data: remoteData, fileRef }) => {
         if (disposed) {
           return;
         }
 
-        fileIdRef.current = fileId;
+        fileRefRef.current = fileRef;
 
-        if (dirtyRef.current) {
-          setLastSavedAt(driveData.updatedAt);
-          setSaveStatus('dirty');
-          return;
+        if (isSameProviderCache) {
+          if (dirtyRef.current) {
+            setLastSavedAt(remoteData.updatedAt);
+            setSaveStatus('dirty');
+            return;
+          }
+
+          const localData = dataRef.current;
+          if (localData && Date.parse(localData.updatedAt) > Date.parse(remoteData.updatedAt)) {
+            dataRef.current = localData;
+            setData(localData);
+            setLastSavedAt(remoteData.updatedAt);
+            setSaveStatus('dirty');
+            return;
+          }
         }
 
-        const localData = dataRef.current;
-        if (localData && Date.parse(localData.updatedAt) > Date.parse(driveData.updatedAt)) {
-          dataRef.current = localData;
-          setData(localData);
-          setLastSavedAt(driveData.updatedAt);
-          setSaveStatus('dirty');
-          return;
-        }
-
-        dataRef.current = driveData;
+        dataRef.current = remoteData;
         dirtyRef.current = false;
-        setData(driveData);
-        setLastSavedAt(driveData.updatedAt);
-        saveLocalRunbookleData(driveData);
+        setData(remoteData);
+        setLastSavedAt(remoteData.updatedAt);
+        saveLocalRunbookleData(remoteData);
+        saveLocalDataProvider(client.providerId);
         setSaveStatus('saved');
       })
       .catch((error) => {
@@ -95,7 +110,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
     return () => {
       disposed = true;
     };
-  }, [accessToken]);
+  }, [client]);
 
   const mutateData = useCallback(
     (updater: (currentData: RunbookleData) => RunbookleData) => {
@@ -103,16 +118,16 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
         const nextData = updater(currentData);
 
         dataRef.current = nextData;
-        dirtyRef.current = Boolean(accessToken);
+        dirtyRef.current = Boolean(client);
         saveLocalRunbookleData(nextData);
         setLastSavedAt(nextData.updatedAt);
-        setSaveStatus(accessToken ? 'dirty' : 'local');
+        setSaveStatus(client ? 'dirty' : 'local');
         setErrorMessage(null);
 
         return nextData;
       });
     },
-    [accessToken],
+    [client],
   );
 
   const createRunbookFromDraft = useCallback(
@@ -175,7 +190,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
   );
 
   const saveData = useCallback(async (dataToSave: RunbookleData) => {
-    if (!accessToken) {
+    if (!client) {
       saveLocalRunbookleData(dataToSave);
       dirtyRef.current = false;
       setLastSavedAt(dataToSave.updatedAt);
@@ -191,15 +206,16 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
     setErrorMessage(null);
 
     try {
-      const result = await saveRunbookleData(accessToken, dataToSave, fileIdRef.current);
+      const result = await saveRunbookleData(client, dataToSave, fileRefRef.current);
 
       if (saveRequestIdRef.current !== requestId) {
         return;
       }
 
-      fileIdRef.current = result.fileId;
+      fileRefRef.current = result.fileRef;
       setLastSavedAt(result.data.updatedAt);
       saveLocalRunbookleData(result.data);
+      saveLocalDataProvider(client.providerId);
 
       if (dataRef.current === dataToSave) {
         dirtyRef.current = false;
@@ -217,7 +233,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       setErrorMessage(createSaveErrorMessage(error));
       setSaveStatus('error');
     }
-  }, [accessToken]);
+  }, [client]);
 
   const saveNow = useCallback(async () => {
     await saveData(dataRef.current);
@@ -225,7 +241,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
 
   const replaceData = useCallback(
     async (nextData: RunbookleData) => {
-      if (!accessToken) {
+      if (!client) {
         dataRef.current = nextData;
         dirtyRef.current = false;
         saveLocalRunbookleData(nextData);
@@ -243,16 +259,17 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       setErrorMessage(null);
 
       try {
-        const result = await saveRunbookleData(accessToken, nextData, fileIdRef.current);
+        const result = await saveRunbookleData(client, nextData, fileRefRef.current);
 
         if (saveRequestIdRef.current !== requestId) {
           return;
         }
 
-        fileIdRef.current = result.fileId;
+        fileRefRef.current = result.fileRef;
         dataRef.current = result.data;
         dirtyRef.current = false;
         saveLocalRunbookleData(result.data);
+        saveLocalDataProvider(client.providerId);
         setData(result.data);
         setLastSavedAt(result.data.updatedAt);
         setSaveStatus('saved');
@@ -265,12 +282,12 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
         throw error;
       }
     },
-    [accessToken],
+    [client],
   );
 
-  const reloadFromDrive = useCallback(async () => {
-    if (!accessToken) {
-      setErrorMessage('Google Driveに接続すると同期できます。');
+  const reloadFromStorage = useCallback(async () => {
+    if (!client) {
+      setErrorMessage('ストレージに接続すると同期できます。');
       setSaveStatus('local');
       return;
     }
@@ -287,18 +304,19 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
     setErrorMessage(null);
 
     try {
-      const result = await loadOrCreateRunbookleData(accessToken, dataRef.current);
+      const result = await loadOrCreateRunbookleData(client, dataRef.current);
 
       if (loadRequestIdRef.current !== requestId) {
         return;
       }
 
-      fileIdRef.current = result.fileId;
+      fileRefRef.current = result.fileRef;
       dataRef.current = result.data;
       dirtyRef.current = false;
       setData(result.data);
       setLastSavedAt(result.data.updatedAt);
       saveLocalRunbookleData(result.data);
+      saveLocalDataProvider(client.providerId);
       setSaveStatus('saved');
     } catch (error) {
       if (loadRequestIdRef.current !== requestId) {
@@ -308,7 +326,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       setErrorMessage(createSaveErrorMessage(error));
       setSaveStatus('error');
     }
-  }, [accessToken]);
+  }, [client]);
 
   useEffect(() => {
     if (saveStatus !== 'dirty') {
@@ -331,7 +349,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       deleteRunbook,
       errorMessage,
       lastSavedAt,
-      reloadFromDrive,
+      reloadFromStorage,
       replaceData,
       saveNow,
       saveStatus,
@@ -344,7 +362,7 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
       deleteRunbook,
       errorMessage,
       lastSavedAt,
-      reloadFromDrive,
+      reloadFromStorage,
       replaceData,
       saveNow,
       saveStatus,
@@ -355,9 +373,9 @@ export function useRunbooks(accessToken: string | null): UseRunbooksResult {
 }
 
 function createSaveErrorMessage(error: unknown) {
-  if (error instanceof GoogleDriveError) {
+  if (error instanceof StorageError) {
     if (error.status === 401) {
-      return 'Google Driveの認可が期限切れです。ログアウトして接続し直してください。';
+      return 'ストレージの認可が期限切れです。接続し直してください。';
     }
 
     return error.message;
