@@ -112,6 +112,11 @@ function RunbookList({ attachmentRunbookIds, emptyText, runbooks, onNavigate }: 
                 {attachmentRunbookIds.has(runbook.id) ? (
                   <Paperclip className={styles.runbookAttachmentIcon} aria-label="添付ファイルあり" size={14} />
                 ) : null}
+                {hasUncheckedCheckbox(runbook) ? (
+                  <span className={styles.uncheckedCheckboxMark} aria-label="未チェックの項目あり">
+                    [  ]
+                  </span>
+                ) : null}
               </span>
               {relativeDayLabel ? <span className={styles.relativeDayBadge}>{relativeDayLabel}</span> : null}
             </button>
@@ -120,6 +125,10 @@ function RunbookList({ attachmentRunbookIds, emptyText, runbooks, onNavigate }: 
       })}
     </div>
   );
+}
+
+function hasUncheckedCheckbox(runbook: Runbook) {
+  return runbook.text.includes('[ ]');
 }
 
 function splitRunbooks(runbooks: Runbook[]) {

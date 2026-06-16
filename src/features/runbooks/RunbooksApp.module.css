@@ -405,7 +405,7 @@
 
 .runbookTitle {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
   gap: 0.5em;
   color: var(--color-text);
@@ -425,12 +425,20 @@
   height: 0.42em;
   border-radius: 50%;
   background: var(--color-text-muted);
-  transform: translateY(-0.08em);
 }
 
 .runbookAttachmentIcon {
   flex: 0 0 auto;
   color: var(--color-text-muted);
+}
+
+.uncheckedCheckboxMark {
+  flex: 0 0 auto;
+  color: var(--color-text-muted);
+  font-size: 0.86rem;
+  font-weight: 760;
+  letter-spacing: 0;
+  white-space: pre;
 }
 
 .relativeDayBadge {
@@ -574,7 +582,7 @@
 .attachmentBadge {
   position: absolute;
   top: -6px;
-  right: -8px;
+  left: -8px;
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
