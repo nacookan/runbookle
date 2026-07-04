@@ -115,7 +115,7 @@ export function RunbookEditorPage({
             }));
             updateRunbook(runbook.id, (current) => ({
               ...current,
-              endDate: completeEndDateInput(endDate),
+              endDate: completeEndDateInput(endDate, completeStartDateInput(startDateInput)),
             }));
           }}
         />

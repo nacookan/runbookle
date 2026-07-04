@@ -1,7 +1,10 @@
+import type { DateParts } from '../../lib/date';
 import {
+  completeStartDateInput,
   formatDateInputPlaceholder,
   formatWeekday,
   previewNearestUpcomingDate,
+  startDateReferenceParts,
   type DateFieldValue,
 } from './dateCompletion';
 import type { RunbookEndDate, RunbookStartDate } from './types';
@@ -27,6 +30,7 @@ export function DateRangeFields({
     month: endDate.mode === 'date' ? endDate.month : null,
     day: endDate.mode === 'date' ? endDate.day : null,
   };
+  const endReferenceDate = startDateReferenceParts(completeStartDateInput(startDate));
 
   return (
     <fieldset className={`${styles.field} ${styles.dateRangeField}`}>
@@ -40,6 +44,7 @@ export function DateRangeFields({
         <DateInputs
           value={endDateValue}
           labelPrefix="終了"
+          referenceDate={endReferenceDate}
           onChange={(value) => onEndDateChange(createEndDate(value))}
         />
       </div>
@@ -50,11 +55,12 @@ export function DateRangeFields({
 type DateInputsProps = {
   labelPrefix: string;
   value: DateFieldValue;
+  referenceDate?: DateParts;
   onChange: (value: DateFieldValue) => void;
 };
 
-function DateInputs({ labelPrefix, value, onChange }: DateInputsProps) {
-  const previewValue = previewNearestUpcomingDate(value);
+function DateInputs({ labelPrefix, value, referenceDate, onChange }: DateInputsProps) {
+  const previewValue = previewNearestUpcomingDate(value, referenceDate);
   const weekday = formatWeekday(previewValue);
   const handleChange = (field: DateFieldName, nextFieldValue: number | null) => {
     onChange({ ...value, [field]: nextFieldValue });

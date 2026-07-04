@@ -17,10 +17,11 @@ export function NewRunbookPage({ onCreate, onNavigate }: NewRunbookPageProps) {
   const [draft, setDraft] = useState<RunbookDraft>(createEmptyRunbookDraft);
 
   const handleCreate = () => {
+    const completedStartDate = completeStartDateInput(draft.startDate);
     const completedDraft = {
       ...draft,
-      startDate: completeStartDateInput(draft.startDate),
-      endDate: completeEndDateInput(draft.endDate),
+      startDate: completedStartDate,
+      endDate: completeEndDateInput(draft.endDate, completedStartDate),
     };
     const initialText = generateInitialRunbookText(completedDraft.startDate, completedDraft.endDate);
     const id = onCreate({

@@ -1,4 +1,4 @@
-import { todayParts } from '../../lib/date';
+import { todayParts, type DateParts } from '../../lib/date';
 import type { DatePrecision, EndDatePrecision, RunbookEndDate, RunbookStartDate } from './types';
 
 export type DateFieldValue = {
@@ -11,31 +11,39 @@ export function completeStartDateInput(value: RunbookStartDate): RunbookStartDat
   return createStartDate(previewNearestUpcomingDate(toDateFieldValue(value)));
 }
 
-export function completeEndDateInput(value: RunbookEndDate): RunbookEndDate {
+export function completeEndDateInput(value: RunbookEndDate, startDate: RunbookStartDate): RunbookEndDate {
   if (value.mode === 'none') {
     return value;
   }
 
-  return createEndDate(previewNearestUpcomingDate(toDateFieldValue(value)));
+  return createEndDate(previewNearestUpcomingDate(toDateFieldValue(value), startDateReferenceParts(startDate)));
 }
 
-export function previewNearestUpcomingDate(value: DateFieldValue): DateFieldValue {
+export function startDateReferenceParts(startDate: RunbookStartDate): DateParts | undefined {
+  if (startDate.precision !== 'day' || startDate.year === null || startDate.month === null || startDate.day === null) {
+    return undefined;
+  }
+
+  return { year: startDate.year, month: startDate.month, day: startDate.day };
+}
+
+export function previewNearestUpcomingDate(value: DateFieldValue, referenceDate: DateParts = todayParts()): DateFieldValue {
   if (value.month !== null && value.day !== null) {
     return {
       ...value,
-      year: value.year ?? inferNearestYear(value.month, value.day),
+      year: value.year ?? inferNearestYear(value.month, value.day, referenceDate),
     };
   }
 
   if (value.month !== null && value.year === null) {
     return {
       ...value,
-      year: inferNearestYear(value.month, value.day),
+      year: inferNearestYear(value.month, value.day, referenceDate),
     };
   }
 
   if (value.day !== null && value.month === null) {
-    const inferred = inferNearestYearMonth(value.year, value.day);
+    const inferred = inferNearestYearMonth(value.year, value.day, referenceDate);
 
     return {
       ...value,
@@ -130,21 +138,19 @@ function toDateFieldValue(value: DateFieldValue): DateFieldValue {
   };
 }
 
-function inferNearestYear(month: number, day: number | null) {
-  const today = todayParts();
-
+function inferNearestYear(month: number, day: number | null, referenceDate: DateParts) {
   if (day === null) {
-    return month >= today.month ? today.year : today.year + 1;
+    return month >= referenceDate.month ? referenceDate.year : referenceDate.year + 1;
   }
 
   for (let offset = 0; offset < 12; offset += 1) {
-    const candidateYear = today.year + offset;
+    const candidateYear = referenceDate.year + offset;
 
     if (!isValidDate(candidateYear, month, day)) {
       continue;
     }
 
-    if (dateValue(candidateYear, month, day) >= dateValue(today.year, today.month, today.day)) {
+    if (dateValue(candidateYear, month, day) >= dateValue(referenceDate.year, referenceDate.month, referenceDate.day)) {
       return candidateYear;
     }
   }
@@ -152,11 +158,10 @@ function inferNearestYear(month: number, day: number | null) {
   return null;
 }
 
-function inferNearestYearMonth(year: number | null, day: number) {
-  const today = todayParts();
-  const startYear = year ?? today.year;
-  const startMonth = year === null || year === today.year ? today.month : 1;
-  const todayValue = dateValue(today.year, today.month, today.day);
+function inferNearestYearMonth(year: number | null, day: number, referenceDate: DateParts) {
+  const startYear = year ?? referenceDate.year;
+  const startMonth = year === null || year === referenceDate.year ? referenceDate.month : 1;
+  const referenceValue = dateValue(referenceDate.year, referenceDate.month, referenceDate.day);
 
   for (let offset = 0; offset < 36; offset += 1) {
     const candidateMonthIndex = startMonth - 1 + offset;
@@ -169,14 +174,14 @@ function inferNearestYearMonth(year: number | null, day: number) {
 
     const candidateValue = dateValue(candidateYear, candidateMonth, day);
 
-    if (year !== null && year !== today.year) {
+    if (year !== null && year !== referenceDate.year) {
       return {
         year: candidateYear,
         month: candidateMonth,
       };
     }
 
-    if (candidateValue >= todayValue) {
+    if (candidateValue >= referenceValue) {
       return {
         year: candidateYear,
         month: candidateMonth,
